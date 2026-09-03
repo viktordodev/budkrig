@@ -3,11 +3,14 @@ pre-commit:
   parallel: true
   commands:
     biome:
-      glob: "*.{ts,tsx,js,jsx,json,css}"
+      glob: "*.{ts,tsx,js,jsx,mjs,json,css}"
       run: pnpm biome check --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true
     secret-scan:
-      run: pnpm dlx secretlint "**/*" || true
+      run: |
+        if git diff --cached -U0 -- {staged_files} | grep -nE '^\+.*(sk_live_[A-Za-z0-9]+|rk_live_[A-Za-z0-9]+|whsec_[A-Za-z0-9]{24,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----)'; then
+          echo "✖ possible secret in staged changes — remove it or use .env (gitignored)"; exit 1
+        fi
 
 pre-push:
   commands:
