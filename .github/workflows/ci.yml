@@ -16,6 +16,9 @@ jobs:
   verify:
     name: typecheck · lint · test · build · smoke
     runs-on: ubuntu-latest
+    env:
+      # No real env in CI; the app/tests must not require it to load.
+      SKIP_ENV_VALIDATION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -50,6 +53,9 @@ jobs:
   integration:
     name: integration (Testcontainers Postgres)
     runs-on: ubuntu-latest
+    env:
+      # The test's DB URL comes from Testcontainers, not the environment.
+      SKIP_ENV_VALIDATION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
