@@ -1,0 +1,37 @@
+# deps
+node_modules/
+.pnp.*
+.yarn/*
+
+# next
+.next/
+out/
+next-env.d.ts
+
+# build
+dist/
+build/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# test / coverage
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# local infra
+docker/data/
+*.pem
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log

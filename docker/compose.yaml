@@ -1,0 +1,75 @@
+# Local dev stack. Production runs the same services as Coolify-managed
+# services on one VPS (see docs/architecture/infrastructure.md).
+#
+#   pnpm infra:up      # postgres + redis + mailpit
+#   pnpm dev           # Next.js on :3000
+#   pnpm worker:dev    # BullMQ worker
+#
+# `web` and `worker` here are optional — run them on the host for fast reloads,
+# or `docker compose --profile app up` to run the built image end to end (used
+# by the e2e test job).
+
+name: budkrig
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: budkrig_app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: budkrig
+    ports: ["5432:5432"]
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U budkrig_app -d budkrig"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-bookworm
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6379:6379"]
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # web UI — http://localhost:8025
+    environment:
+      MP_MAX_MESSAGES: "500"
+
+  web:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["node", "server.js"]
+    env_file: ../.env
+    ports: ["3000:3000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["node", "dist/workers/main.js"]
+    env_file: ../.env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }

@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "rootDir": "src",
+    "jsx": "react-jsx",
+    "incremental": false,
+    "plugins": []
+  },
+  "include": ["src/workers/**/*.ts", "src/modules/**/*.ts", "src/server/**/*.ts", "src/lib/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "src/app/**", "src/components/**"]
+}

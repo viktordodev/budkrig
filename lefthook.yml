@@ -1,0 +1,15 @@
+# Fast pre-commit / pre-push checks. Install: pnpm prepare (runs lefthook install).
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{ts,tsx,js,jsx,json,css}"
+      run: pnpm biome check --write --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+    secret-scan:
+      run: pnpm dlx secretlint "**/*" || true
+
+pre-push:
+  commands:
+    typecheck:
+      run: pnpm typecheck

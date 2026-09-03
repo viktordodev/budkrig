@@ -1,0 +1,46 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "ignore": [".next", "dist", "coverage", "playwright-report", "src/server/db/migrations"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "organizeImports": { "enabled": true },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "suspicious": {
+        "noConsoleLog": "error",
+        "noExplicitAny": "error"
+      },
+      "style": {
+        "useNamingConvention": "off",
+        "noNonNullAssertion": "warn"
+      },
+      "nursery": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "stripe": "Import Stripe only in src/server/payments/* — modules/ must stay vendor-agnostic (see conventions).",
+              "ioredis": "Import ioredis only in src/server/redis/*.",
+              "bullmq": "Import bullmq only in src/server/queue/* and src/workers/*."
+            }
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "include": ["src/server/payments/**", "src/workers/**", "src/server/redis/**", "src/server/queue/**", "*.config.ts", "src/server/config/**"],
+      "linter": { "rules": { "nursery": { "noRestrictedImports": "off" }, "suspicious": { "noConsoleLog": "off" } } }
+    }
+  ]
+}

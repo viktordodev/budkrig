@@ -1,0 +1,30 @@
+# Risk Register
+
+Companion to [`00-overview.md`](00-overview.md). Reviewed at the end of every
+milestone. Score = Likelihood (1–5) × Impact (1–5).
+
+| # | Risk | L | I | Score | Mitigation | Owner |
+| --- | --- | --- | --- | --- | --- | --- |
+| R1 | **Legal: the mechanic is deemed a lottery / "combination gambling" under Spellagen (2018:1138)** — non‑refundable escalating stakes, "only #1 has value" framing. Could mean licence requirement, payment blocking, fines. | 2 | 5 | 10 | Written opinion from a Swedish gambling lawyer **before launch** (ADR‑0015, Open question Q2). Frame product as a paid *advertising placement you actually receive* — no chance element, no prize draw. Keep copy factual, avoid "win"/"jackpot". | Founder |
+| R2 | **Money correctness bug** — double charge, paid‑not‑live, wrong rank, ledger drift. Directly causes chargebacks + reputation damage. | 3 | 5 | 15 | Append‑only ledger + integer öre + unique constraints (one payment per bid, one settled bid per PI) + idempotent webhook + hourly ledger assertion + reconciliation job. Heavy tests + a load test of concurrent claims (ADR‑0004, 0005). | Eng |
+| R3 | **Viral spike knocks the site over** at the exact moment it matters most. | 3 | 4 | 12 | Cache‑first read path, single‑query board, graceful stale‑serve degradation, connection‑pool ceiling, load test to 100× before launch, headroom on the VPS, one‑click vertical resize runbook. | Eng |
+| R4 | **Chargebacks / payment fraud** — stolen cards, "not as described" disputes on non‑refundable purchases. Too many → Stripe account review or termination. | 3 | 4 | 12 | Hosted Checkout with Stripe Radar, 3DS on cards, Swish (BankID‑bound, near‑zero fraud) promoted first, clear pre‑purchase terms + explicit "non‑refundable" consent, dispute runbook, watch the dispute rate vs Stripe's 0.75% threshold. | Founder + Eng |
+| R5 | **Offensive / illegal / malware listings** on a public, SEO‑indexed page tied to our brand and company. | 4 | 3 | 12 | Pre‑publish auto‑checks (denylist, TLD/age heuristics, keyword scan, URL safety), post‑publish operator queue, fast takedown, `ModerationAction` audit trail, `rel="nofollow ugc sponsored"` on outbound links (ADR‑0012). | Founder (as operator) |
+| R6 | **Stripe account suspension** (any reason) = 100% revenue outage, funds held. | 2 | 5 | 10 | Complete Stripe onboarding properly as a real Swedish business, honest MCC/description, keep disputes low, don't surprise Stripe with volume spikes (tell them before launch). Keep the payment layer behind an adapter interface so a second PSP is a bounded change (ADR‑0006). | Founder |
+| R7 | **Single VPS is a single point of failure** — host dies, disk fills, noisy neighbour. | 2 | 4 | 8 | WAL + nightly offsite encrypted backups, **rehearsed** restore, infra‑as‑config so a rebuild is hours not days, disk + DB‑connection alerts. Accept the exposure for v1; multi‑node only when load says so (ADR‑0011). | Eng |
+| R8 | **EU consumer‑law non‑compliance at checkout** — right of withdrawal not properly waived for immediately‑performed digital service → buyers can force refunds for 14 days. | 3 | 3 | 9 | Explicit pre‑purchase checkbox: consent to immediate performance + acknowledgement that the withdrawal right is lost. Store consent with the payment. Lawyer reviews the wording (ADR‑0007, 0015). | Founder + legal |
+| R9 | **GDPR exposure** — `owner_email` + IP + payment metadata is personal data; subprocessors, retention, DSARs. | 2 | 4 | 8 | Minimise PII, EU‑only hosting + EU Stripe, DPAs with every subprocessor, documented retention + deletion, cookie‑free analytics, a DSAR procedure. Register with IMY only if required. (ADR‑0013, 0015) | Founder |
+| R10 | **Cloning an established incumbent** — outbid.lol (or a faster Swedish competitor) captures the market first; or the fad simply passes. | 4 | 3 | 12 | Move fast (M1–M5 in weeks), lean spend, Sweden‑specific moat (Swish, language, local trust, invoices). Treat it as a cheap bet with a hard cost ceiling. | Founder |
+| R11 | **Key‑person risk** — one developer, one operator. | 3 | 3 | 9 | This documentation set, IaC, runbooks, no undocumented manual prod steps, secrets in a recoverable manager. | Founder |
+| R12 | **Async payment methods (Swish/Klarna) confuse fulfilment** — buyer thinks they paid, listing isn't live yet, support load + duplicate attempts. | 3 | 2 | 6 | UI clearly states "we'll email you the second it's confirmed", `pending` state visible on the manage page, webhook‑only fulfilment path is the same for all methods, receipt email within seconds of settlement (ADR‑0007, core‑flows Flow 1b). | Eng |
+| R13 | **Domain‑squatting / listing someone else's brand** without their consent → C&D letters, platform‑liability questions. | 3 | 3 | 9 | Decide the policy up front (Open question Q4): either verify control of the domain/handle, or a documented notice‑and‑takedown process + `ugc` link rel + a visible "this listing is not endorsed by the linked site" disclaimer. | Founder + legal |
+| R14 | **Secret leakage** — Stripe live key, DB creds, webhook signing secret, listing‑management signing key. | 2 | 5 | 10 | Secrets only in Coolify env (encrypted), never in repo or client bundle, `.env.example` is keys‑only, pre‑commit secret scan, rotation runbook, least‑privilege DB user for the app. | Eng |
+| R15 | **Scope creep** — accounts, dashboards, multi‑currency, auctions with winners — before the core loop is proven. | 4 | 2 | 8 | The non‑goals list in the brief is binding; changing it needs an ADR. Milestones are loop‑first. | Founder |
+
+## Top 5 to act on now
+
+1. **R2** — bake ledger correctness + idempotency + tests into Milestone 2's design, not after.
+2. **R1 / R8 / R13** — get the lawyer engaged during Milestone 3, make it a hard launch gate (ADR‑0015).
+3. **R3** — write the load test alongside the claim flow; it's a Milestone 2 deliverable, not Milestone 4.
+4. **R4 / R6** — talk to Stripe as a real business early; promote Swish; write the dispute runbook.
+5. **R7** — backup + **restore rehearsal** is a Milestone 1 exit criterion, not a "later".
