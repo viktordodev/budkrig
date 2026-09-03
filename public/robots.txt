@@ -1,0 +1,3 @@
+# Prototype — not for indexing yet. See ADR-0015 before flipping this.
+User-agent: *
+Disallow: /

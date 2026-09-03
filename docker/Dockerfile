@@ -36,10 +36,10 @@ ENV NODE_ENV=production \
 RUN addgroup --system --gid 1001 nodejs \
  && adduser  --system --uid 1001 --ingroup nodejs nextjs
 
-# Next.js standalone server + assets
+# Next.js standalone server. `pnpm build` runs scripts/prep-standalone.mjs, which
+# copies .next/static + public/ into .next/standalone, so this one COPY is
+# self-contained for the web role.
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=build --chown=nextjs:nodejs /app/public ./public
 
 # Worker bundle + full node_modules (worker-only deps like bullmq aren't traced
 # into the standalone output). TODO(perf): slim this to prod deps once the image
