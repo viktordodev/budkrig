@@ -3,8 +3,9 @@ import { asc, desc, eq } from "drizzle-orm";
 
 /**
  * Read models for the board. The board is served from ONE query, ordered by the
- * rank key `(current_amount_ore DESC, first_active_at ASC)` (ADR-0005). No
- * per-row follow-up queries — ever.
+ * rank key `(current_amount_ore DESC, first_active_at ASC, id ASC)` (ADR-0005;
+ * `id` keeps the order total — see modules/bids/rank.ts). No per-row follow-up
+ * queries — ever.
  */
 export type BoardListing = {
   slug: string;
@@ -32,6 +33,10 @@ export async function getActiveBoard(limit = 50): Promise<BoardListing[]> {
     .from(schema.listings)
     .leftJoin(schema.categories, eq(schema.listings.categoryId, schema.categories.id))
     .where(eq(schema.listings.status, "active"))
-    .orderBy(desc(schema.listings.currentAmountOre), asc(schema.listings.firstActiveAt))
+    .orderBy(
+      desc(schema.listings.currentAmountOre),
+      asc(schema.listings.firstActiveAt),
+      asc(schema.listings.id),
+    )
     .limit(limit);
 }
