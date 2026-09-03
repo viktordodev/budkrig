@@ -23,7 +23,7 @@ with migrations run before each release. Topology: see
 - **Health check path:** `/healthz` (liveness). Use `/readyz` once the DB/Redis
   env is set and you want deploys gated on dependencies being reachable.
 - **Pre-deploy command:**
-  `node_modules/.bin/drizzle-kit migrate`
+  `node dist/server/db/migrate.js`
   (forward-only, expand/contract migrations — a bad migration fails the deploy
   instead of crash-looping; see conventions).
 - **Start command:** leave default (`node server.js`).
@@ -84,17 +84,17 @@ Until then, Coolify's own GitHub integration (auto-deploy on push) is fine.
 
 - [ ] Postgres + Redis services healthy.
 - [ ] Web env vars set (table above).
-- [ ] Deploy the **web** service. Pre-deploy runs `drizzle-kit migrate` — check
-      the deploy log shows the `0000_*` migration applied.
+- [ ] Deploy the **web** service. Pre-deploy runs `node dist/server/db/migrate.js`
+      — the deploy log shows `db:migrate — up to date`.
 - [ ] `curl https://<domain>/healthz` → `{"status":"ok",…}`.
 - [ ] `curl https://<domain>/readyz` → `{"status":"ready","db":"ok","redis":"ok"}`.
       A `503` here means `DATABASE_URL` / `REDIS_URL` are wrong or the services
       aren't linked.
-- [ ] Run the seed once (one-off): in the web container,
-      `node --import tsx src/server/db/seed.ts` is **not** available (no tsx in
-      the runtime image) — instead seed from your machine against the prod DB
-      with `DATABASE_URL=… pnpm db:seed`, or add a temporary one-off command.
-      The board should then show the demo rows.
+- [ ] Seed reference data once — Coolify one-off command on the web service:
+      `node dist/server/db/seed.js`. In production this inserts **categories
+      only** (no demo listings), so the board renders as genuinely empty
+      ("Inga listningar") — that's the correct fresh-prod state and proves the
+      migrate → query → render path end to end.
 - [ ] Deploy the **worker** service. Its log shows `worker started` and a
       `heartbeat` line each minute.
 - [ ] Point a domain at the web service; Coolify provisions TLS via Traefik.
