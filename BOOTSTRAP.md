@@ -1,104 +1,79 @@
 # Bootstrap — from this scaffold to a running app
 
-This repo currently holds **prep only**: docs, decisions, conventions, and a
-hand-written scaffold (config + `src/` skeleton + a few real files). Nothing is
-installed and the app does not build yet. Follow this to stand it up
-(≈ Milestone 1 in [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md)).
+Tracks Milestone 1 in [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md).
 
-## 0. Decide the open questions that block M1
+## Milestone 1 status
 
-From the brief's §11: **Q6** (VPS provider/region) at least. The rest can trail
-into M2–M3.
+**Done (branch `milestone-1-walking-skeleton`):** toolchain installed +
+lockfile; Next.js App Router shell (Tailwind v4, next-intl `sv`/`en`, no locale
+prefix); `pino` logger + `x-request-id` middleware + `instrumentation.ts` error
+seam; Drizzle client + first migration (`0000_*`, includes `invoice_number_seq`)
++ idempotent seed; `GET /healthz` (liveness) and `GET /readyz` (DB+Redis
+readiness); home page renders the board from the DB and **degrades gracefully**
+when the DB is down; BullMQ worker (`dist/workers/main.js`) with a heartbeat
+job scheduler + graceful shutdown; multi-stage Dockerfile (one image, web +
+worker roles); CI = typecheck · lint · test · build · standalone `/healthz`
+smoke · docker image build. `pnpm typecheck && pnpm lint && pnpm test &&
+pnpm build` all pass locally.
 
-## 1. Prerequisites
+**Still needs infra (you):**
+- Run against real Postgres/Redis: `pnpm infra:up` (needs Docker) →
+  `pnpm db:migrate && pnpm db:seed` → confirm `/readyz` returns 200 and the
+  board shows the seed rows.
+- Wire error tracking — set `SENTRY_DSN` (GlitchTip or self-hosted Sentry) and
+  finish `src/instrumentation.ts`.
+- Coolify: `preview` + `production` projects, Postgres + Redis services,
+  `pnpm db:migrate` as the pre-deploy command, and the deploy-webhook secrets
+  (`COOLIFY_DEPLOY_WEBHOOK`, `COOLIFY_TOKEN`) in GitHub Actions.
+- Uptime monitor on a **separate** host hitting `/healthz`.
+- **Backup + restore rehearsal** once by hand, then automated; write
+  `docs/runbooks/restore.md`.
 
-- Node 22 (`nvm use`), `corepack enable` (gives pnpm)
-- Docker Desktop / Docker Engine
-- A Stripe account in **test mode** + the Stripe CLI
-- Accounts (can wait): a VPS, Coolify installed on it, an object-storage bucket,
-  an email provider
+## Prerequisites
 
-## 2. Install & local infra
+- Node ≥ 22 (repo targets 24 — see `.nvmrc`); `pnpm` (`corepack enable` or
+  `npm i -g pnpm`)
+- Docker (for local Postgres/Redis and to build the image)
+- A Stripe test-mode account + the Stripe CLI (Milestone 2)
 
-```bash
-corepack enable
-pnpm install                 # writes pnpm-lock.yaml — commit it
-cp .env.example .env         # fill in Stripe test keys + secrets
-pnpm infra:up                # postgres + redis + mailpit (docker/compose.yaml)
-```
-
-> **Versions**: `package.json` pins conservative majors as of 2026-09. Before
-> committing the lockfile, check for a newer stable Next.js (16.x may be out)
-> and Drizzle, and bump deliberately. Re-run `pnpm typecheck` after.
-
-## 3. Generate the Next.js app shell around the scaffold
-
-The scaffold already defines `next.config.ts`, `tsconfig.json`, `biome.json`,
-and `src/` structure. You need the App Router entry files and Tailwind:
-
-```bash
-pnpm add -D tailwindcss @tailwindcss/postcss postcss
-# create: src/app/[locale]/layout.tsx, src/app/[locale]/page.tsx,
-#         src/app/globals.css, postcss.config.mjs, src/server/config/i18n.ts
-```
-
-Add **shadcn/ui** (`pnpm dlx shadcn@latest init`) and **next-intl** message
-catalogs (`messages/sv.json`, `messages/en.json`) — see ADR-0002 and the
-engineering guidelines. Keep `src/app/**` thin.
-
-## 4. Database
+## Run it locally
 
 ```bash
-# author the first migration from src/server/db/schema.ts
-pnpm db:generate
-pnpm db:migrate
-pnpm db:seed                  # categories + one demo listing (write src/server/db/seed.ts)
+pnpm install
+cp .env.example .env          # fill LISTING_MANAGEMENT_JWT_SECRET + IP_HASH_SALT
+pnpm infra:up                 # postgres + redis + mailpit  (docker/compose.yaml)
+pnpm db:migrate               # apply src/server/db/migrations
+pnpm db:seed                  # categories + demo listings
+pnpm dev                      # http://localhost:3000
+pnpm worker:dev               # heartbeat worker (separate terminal)
 ```
 
-Also add, in the first migration or a follow-up:
-`CREATE SEQUENCE invoice_number_seq;` (ADR-0007).
+Verify: `curl localhost:3000/healthz` → `ok`; `curl localhost:3000/readyz` →
+`{"status":"ready","db":"ok","redis":"ok"}`; the home page lists the seed rows.
 
-Write `src/server/db/client.ts` — a pooled `postgres` client with
-`drizzle(sql, { schema, casing: "snake_case" })` and `DATABASE_POOL_MAX`.
+Checks: `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm build` (build sets
+nothing up — add `SKIP_ENV_VALIDATION=1` if you have no `.env`).
 
-## 5. Wire the walking skeleton (M1 exit criteria)
+## Bump dependency majors (deliberately)
 
-- [ ] `GET /healthz` (liveness) and `GET /readyz` (DB + Redis reachable)
-- [ ] Home route renders the seeded listing **from the DB**
-- [ ] `pino` logger + request-id middleware; `console.log` banned by lint
-- [ ] Error tracking (GlitchTip/Sentry) receiving events
-- [ ] `src/workers/main.ts` boots a BullMQ worker with one trivial repeatable job
-- [ ] Dockerfile builds locally: `docker compose -f docker/compose.yaml --profile app up`
-- [ ] CI green on a PR (`.github/workflows/ci.yml`)
-- [ ] Coolify: two projects (preview, production), Postgres + Redis services,
-      the deploy webhook wired to CI, **migrations as a pre-deploy command**
-- [ ] Deployed to preview through CI
-- [ ] Uptime monitor (on a *different* host) hitting `/healthz`
-- [ ] **Backup + restore rehearsal performed once by hand**, then automated;
-      write `docs/runbooks/restore.md`
+Resolved versions are conservative (Next 15, Biome 1, Zod 3, next-intl 3).
+Newer majors exist (Next 16, Biome 2, Zod 4, next-intl 4). Bump one at a time
+with its codemod/migration guide, re-run `pnpm typecheck && pnpm build`.
 
-## 6. Then: Milestone 2 (the core loop)
+## Milestone 2 (the core loop)
 
-Build `modules/bids` (ledger, threshold, fulfilment), `modules/payments`
-(checkout, settlement), the Stripe adapter + webhook route, and the board.
-Test to the Tier-1 bar in [ADR-0014](docs/adr/0014-testing-strategy.md) —
-idempotency, concurrency, partial failure — and write the `k6` load test in the
-same milestone.
+Build `modules/bids` (ledger, threshold, **fulfilment transaction**),
+`modules/payments` (checkout, settlement), the Stripe adapter + webhook route,
+`/claim`, `/go/[slug]`, and board caching (ADR-0009). Test to the Tier-1 bar in
+[ADR-0014](docs/adr/0014-testing-strategy.md) — idempotency, concurrency,
+partial failure — plus the `k6` load test, in the same milestone.
 
-## Worker packaging note
+## Known follow-ups
 
-The Dockerfile currently ships `dist/` + full `node_modules` for the worker.
-Before M1 ends, decide: bundle the worker with `esbuild` into one file (smaller
-image, no `node_modules` in the runner) vs. keep the current approach. Update
-`build:worker` and the Dockerfile accordingly.
-
-## House-keeping the scaffold left for you
-
-- `pnpm-lock.yaml` — generate and commit
-- `postcss.config.mjs`, `src/app/globals.css`, Tailwind config
-- `src/server/config/i18n.ts`, `messages/{sv,en}.json`
-- `src/server/db/client.ts`, `src/server/db/seed.ts`
-- `vitest.config.ts`, `playwright.config.ts`, `src/test/**`
-- `git init` (this is not a git repo yet), first commit, push, protect `main`
-- Consider `dependency-cruiser` for stricter import-boundary enforcement than
-  `biome.json` can do
+- **Worker image size**: the Dockerfile ships full `node_modules` for the
+  worker (bullmq isn't traced into the Next standalone output). Slim to prod
+  deps once size matters.
+- **Import boundaries**: `biome.json` restricts a few vendor imports by path;
+  add `dependency-cruiser` for the full `app → modules → server → lib` rule.
+- **i18n routing**: no `/en` URL prefix yet — revisit if SEO needs it.
+- `playwright.config.ts` + `src/test/**` factories land with Milestone 2.

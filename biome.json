@@ -39,8 +39,24 @@
   },
   "overrides": [
     {
-      "include": ["src/server/payments/**", "src/workers/**", "src/server/redis/**", "src/server/queue/**", "*.config.ts", "src/server/config/**"],
-      "linter": { "rules": { "nursery": { "noRestrictedImports": "off" }, "suspicious": { "noConsoleLog": "off" } } }
+      "include": [
+        "src/server/payments/**",
+        "src/workers/**",
+        "src/server/redis/**",
+        "src/server/queue/**",
+        "*.config.ts",
+        "src/server/config/**"
+      ],
+      "linter": {
+        "rules": {
+          "nursery": { "noRestrictedImports": "off" },
+          "suspicious": { "noConsoleLog": "off" }
+        }
+      }
+    },
+    {
+      "include": ["scripts/**", "*.mjs"],
+      "linter": { "rules": { "suspicious": { "noConsoleLog": "off" } } }
     }
   ]
 }

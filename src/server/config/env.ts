@@ -2,13 +2,16 @@ import { z } from "zod";
 
 /**
  * The single place env vars enter the app. Import the typed `env` object;
- * never read `process.env` elsewhere in server/ or modules/.
- * Keys mirror .env.example.
+ * never read `process.env` elsewhere in server/ or modules/. Keys mirror
+ * .env.example.
+ *
+ * During `next build` / image build / CI there is no real environment, so
+ * SKIP_ENV_VALIDATION=1 bypasses parsing. Never set it at runtime.
  */
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_ENV: z.enum(["local", "preview", "production"]).default("local"),
-  APP_URL: z.string().url(),
+  APP_URL: z.string().url().default("http://localhost:3000"),
   PORT: z.coerce.number().int().positive().default(3000),
 
   DATABASE_URL: z.string().url(),
@@ -17,8 +20,9 @@ const schema = z.object({
 
   REDIS_URL: z.string().url(),
 
-  STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
-  STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_"),
+  // Required from Milestone 2 (payments). Optional now so the skeleton boots.
+  STRIPE_SECRET_KEY: z.string().startsWith("sk_").optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_").optional(),
   STRIPE_TAX_ENABLED: z.coerce.boolean().default(true),
 
   CURRENCY: z.literal("SEK").default("SEK"),
@@ -27,12 +31,15 @@ const schema = z.object({
   PENDING_BID_TTL_MINUTES: z.coerce.number().int().positive().default(30),
   TIMEZONE: z.string().default("Europe/Stockholm"),
 
-  LISTING_MANAGEMENT_JWT_SECRET: z.string().min(32),
+  LISTING_MANAGEMENT_JWT_SECRET: z
+    .string()
+    .min(32)
+    .default("dev-only-insecure-listing-mgmt-secret-32b"),
   MANAGE_LINK_TTL_HOURS: z.coerce.number().int().positive().default(24),
-  IP_HASH_SALT: z.string().min(16),
+  IP_HASH_SALT: z.string().min(16).default("dev-only-insecure-ip-salt"),
 
   EMAIL_PROVIDER: z.enum(["resend", "postmark", "smtp"]).default("smtp"),
-  EMAIL_FROM: z.string(),
+  EMAIL_FROM: z.string().default("Budkrig <no-reply@budkrig.se>"),
   RESEND_API_KEY: z.string().optional(),
   SMTP_URL: z.string().url().optional(),
 
@@ -52,15 +59,44 @@ const schema = z.object({
   OPERATOR_ALLOWED_EMAILS: z
     .string()
     .default("")
-    .transform((s) => s.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)),
+    .transform((s) =>
+      s
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
+    ),
 });
 
-const parsed = schema.safeParse(process.env);
-if (!parsed.success) {
-  const lines = parsed.error.issues.map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`);
-  console.error(`Invalid environment:\n${lines.join("\n")}`);
-  throw new Error("Environment validation failed");
+export type Env = z.infer<typeof schema>;
+
+/** Treat `FOO=` (empty string) as unset — a common .env footgun with optional keys. */
+function withoutBlanks(source: NodeJS.ProcessEnv): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(source)) {
+    out[key] = value === "" ? undefined : value;
+  }
+  return out;
 }
 
-export const env = parsed.data;
-export type Env = typeof env;
+function load(): Env {
+  const raw = withoutBlanks(process.env);
+
+  if (process.env.SKIP_ENV_VALIDATION) {
+    // Build-time only (no real env). Never throws; runtime must provide the
+    // real values.
+    const partial = schema.partial().safeParse(raw);
+    return (partial.success ? partial.data : raw) as Env;
+  }
+
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    const lines = parsed.error.issues.map(
+      (i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`,
+    );
+    console.error(`Invalid environment:\n${lines.join("\n")}`);
+    throw new Error("Environment validation failed");
+  }
+  return parsed.data;
+}
+
+export const env: Env = load();

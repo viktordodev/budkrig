@@ -9,10 +9,11 @@ non‑refundable: to move up you pay the difference over the spot above you, and
 the amount you paid becomes the new floor for the next challenger. Nothing
 expires.
 
-> This repository currently contains **architecture prep only** — the brief,
-> the decision records, the conventions and the scaffold. No application code
-> has been written yet. Start at [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md),
-> then read [`BOOTSTRAP.md`](BOOTSTRAP.md) to stand the project up.
+> **Status:** architecture prep + Milestone 1 walking skeleton. The app builds,
+> serves `/healthz` + `/readyz`, and renders the board from Postgres (degrading
+> gracefully without it); a BullMQ worker runs a heartbeat job. No payment loop
+> yet. Start at [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md);
+> [`BOOTSTRAP.md`](BOOTSTRAP.md) has run/verify steps and what's left in M1.
 
 ## Documentation map
 

@@ -1,0 +1,16 @@
+{
+  "app": {
+    "name": "Budkrig",
+    "tagline": "Pay for your rank. The price only goes up."
+  },
+  "board": {
+    "heading": "The leaderboard",
+    "empty": "No listings yet. Be first.",
+    "rank": "Rank {rank}",
+    "clicks": "{count, plural, =0 {no clicks} one {# click} other {# clicks}}",
+    "unavailable": "The leaderboard is warming up — try again in a moment."
+  },
+  "footer": {
+    "builtWith": "Prototype — see docs/ for architecture and decisions."
+  }
+}
