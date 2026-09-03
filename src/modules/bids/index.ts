@@ -18,7 +18,7 @@ export type {
   AnomalyReason,
   FulfilmentContext,
   FulfilmentDecision,
-  FulfilmentWrites,
+  FulfilmentPlan,
   SkipReason,
 } from "./fulfil";
 

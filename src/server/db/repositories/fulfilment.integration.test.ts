@@ -28,7 +28,7 @@ let tdb: TestDb;
 
 beforeAll(async () => {
   tdb = await startTestDb();
-}, 180_000);
+}, 240_000);
 
 afterAll(async () => {
   await tdb?.close();
@@ -45,7 +45,7 @@ describe("fulfilment repository", () => {
     const repo = createFulfilmentRepository(tdb.db, config, at());
 
     const decision = await repo.fulfil(stripeEvent(eventKey, { providerPaymentIntent: "pi_1" }));
-    expect(decision.kind).toBe("fulfil");
+    expect(decision.kind).toBe("proceed");
 
     const [l] = await tdb.db
       .select()
@@ -81,7 +81,7 @@ describe("fulfilment repository", () => {
     const first = await repo.fulfil(event);
     const second = await repo.fulfil(event);
 
-    expect(first.kind).toBe("fulfil");
+    expect(first.kind).toBe("proceed");
     expect(second).toEqual({ kind: "skip", reason: "webhook_replayed" });
 
     const bids = await tdb.db
@@ -122,12 +122,12 @@ describe("fulfilment repository", () => {
     const b = await makePendingBid(tdb.db, listing.id, { deltaOre: 500 });
     const repo = createFulfilmentRepository(tdb.db, config, at());
 
-    const [da, db] = await Promise.all([
+    const [da, dbn] = await Promise.all([
       repo.fulfil(stripeEvent(a.eventKey, { providerPaymentIntent: "pi_a" })),
       repo.fulfil(stripeEvent(b.eventKey, { providerPaymentIntent: "pi_b" })),
     ]);
-    expect(da.kind).toBe("fulfil");
-    expect(db.kind).toBe("fulfil");
+    expect(da.kind).toBe("proceed");
+    expect(dbn.kind).toBe("proceed");
 
     const [l] = await tdb.db
       .select()
@@ -142,6 +142,33 @@ describe("fulfilment repository", () => {
     const ledger = toLedger(bids);
     expect(checkLedgerConsistency(ledger)).toEqual({ ok: true, value: undefined });
     expect(currentAmountFromLedger(ledger)).toBe(800);
+  });
+
+  it("survives many concurrent settlements on one listing", async () => {
+    const listing = await makeListing(tdb.db, { status: "pending_payment", currentAmountOre: 0 });
+    const deltas = [100, 100, 100, 100, 100, 250, 250, 300];
+    const bids = await Promise.all(
+      deltas.map((deltaOre) => makePendingBid(tdb.db, listing.id, { deltaOre })),
+    );
+    const repo = createFulfilmentRepository(tdb.db, config, at());
+
+    await Promise.all(
+      bids.map((x, i) =>
+        repo.fulfil(stripeEvent(x.eventKey, { providerPaymentIntent: `pi_${i}` })),
+      ),
+    );
+
+    const [l] = await tdb.db
+      .select()
+      .from(schema.listings)
+      .where(eq(schema.listings.id, listing.id));
+    expect(l?.currentAmountOre).toBe(deltas.reduce((s, d) => s + d, 0));
+
+    const rows = await tdb.db
+      .select()
+      .from(schema.bids)
+      .where(eq(schema.bids.listingId, listing.id));
+    expect(checkLedgerConsistency(toLedger(rows))).toEqual({ ok: true, value: undefined });
   });
 
   it("runs settlements on DIFFERENT listings independently", async () => {
@@ -162,8 +189,7 @@ describe("fulfilment repository", () => {
     expect(r2?.currentAmountOre).toBe(900);
   });
 
-  it("recomputes against the locked amount when the listing moved since the claim", async () => {
-    // pending bid created when the listing was small; it's since been raised to 2000
+  it("adds the delta on top of the listing's current amount", async () => {
     const listing = await makeListing(tdb.db, {
       status: "active",
       currentAmountOre: 2_000,
@@ -183,6 +209,27 @@ describe("fulfilment repository", () => {
       .where(eq(schema.listings.id, listing.id));
     expect(l?.currentAmountOre).toBe(2_200);
     expect(l?.firstActiveAt?.toISOString()).toBe("2026-08-01T00:00:00.000Z");
+  });
+
+  it("records the bid + payment but does not un-hide a hidden listing", async () => {
+    const listing = await makeListing(tdb.db, {
+      status: "hidden",
+      currentAmountOre: 5_000,
+      firstActiveAt: new Date("2026-08-01T00:00:00Z"),
+    });
+    const { eventKey } = await makePendingBid(tdb.db, listing.id, { deltaOre: 500 });
+    const repo = createFulfilmentRepository(tdb.db, config, at());
+
+    await repo.fulfil(stripeEvent(eventKey, { providerPaymentIntent: "pi_1" }));
+
+    const [l] = await tdb.db
+      .select()
+      .from(schema.listings)
+      .where(eq(schema.listings.id, listing.id));
+    expect(l?.status).toBe("hidden");
+    expect(l?.currentAmountOre).toBe(5_500);
+    const [b] = await tdb.db.select().from(schema.bids).where(eq(schema.bids.eventKey, eventKey));
+    expect(b?.status).toBe("settled");
   });
 
   it("rejects a second settled bid re-using a payment_intent", async () => {

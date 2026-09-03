@@ -1,10 +1,11 @@
-import type { FulfilmentDecision } from "@/modules/bids/fulfil";
+import { ore } from "@/lib/money";
+import type { FulfilmentDecision, FulfilmentPlan } from "@/modules/bids/fulfil";
 import { decideFulfilment } from "@/modules/bids/fulfil";
 import type { Clock, FulfilmentRepository, SettledPaymentEvent } from "@/modules/bids/ports";
-import type { ThresholdConfig } from "@/modules/bids/threshold";
+import { type ThresholdConfig, checkAmount } from "@/modules/bids/threshold";
 import type { BidState, ListingState, PaymentState } from "@/modules/bids/types";
 import { logger } from "@/server/observability/logger";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../schema";
 
@@ -13,9 +14,18 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * The fulfilment transaction (core-flows Flow 1b). One DB transaction:
- * record the webhook event, load bid/payment/listing (listing FOR UPDATE),
- * run the pure `decideFulfilment`, apply the writes. Idempotent on the Stripe
- * event id and on bid + payment_intent.
+ * record the webhook event (idempotency), load bid/payment/listing, run the
+ * pure `decideFulfilment` for the state machine, then apply the ledger write:
+ *
+ *  1. claim the bid: UPDATE bids ... WHERE id = ? AND status = 'pending'
+ *     — the bid row is the mutex; a 2nd delivery gets 0 rows -> already_settled
+ *  2. atomically bump the listing: SET current_amount_ore = current_amount_ore
+ *     + delta ... RETURNING — Postgres reads the latest committed value at lock
+ *     acquisition, so concurrent settlements chain (no read-then-write race)
+ *  3. write the bid's ledger amounts from the RETURNING value
+ *
+ * Idempotent on the Stripe event id and on bid + payment_intent (the
+ * bids_settled_pi_uq partial index).
  */
 export function createFulfilmentRepository(
   db: Db,
@@ -27,7 +37,6 @@ export function createFulfilmentRepository(
       try {
         return await db.transaction((tx) => runFulfilment(tx, event, config, clock));
       } catch (err) {
-        // Backstop: the bids_settled_pi_uq / payments_pi_uq partial indexes.
         if (isUniqueViolation(err)) {
           logger.warn(
             { providerEventId: event.providerEventId, err: messageOf(err) },
@@ -36,7 +45,7 @@ export function createFulfilmentRepository(
           return {
             kind: "anomaly",
             reason: "pi_conflict",
-            detail: `unique violation settling payment_intent ${event.providerPaymentIntent}`,
+            detail: `payment_intent ${event.providerPaymentIntent} is already settled on another bid`,
           };
         }
         throw err;
@@ -76,35 +85,19 @@ async function runFulfilment(
     webhookAlreadyProcessed = existing?.processedAt != null;
   }
 
-  // 2–4. Load the rows the decision needs.
+  // 2. Load the rows the decision needs (plain reads — existence + state).
   const [bidRow] = await tx
     .select()
     .from(schema.bids)
     .where(eq(schema.bids.eventKey, event.eventKey));
-
   const paymentRow = bidRow
     ? (await tx.select().from(schema.payments).where(eq(schema.payments.bidId, bidRow.id)))[0]
     : undefined;
+  const listingRow = bidRow
+    ? (await tx.select().from(schema.listings).where(eq(schema.listings.id, bidRow.listingId)))[0]
+    : undefined;
 
-  let listingRow: ListingRow | undefined;
-  if (bidRow) {
-    // Serialise ALL fulfilment for this listing before we read its current
-    // amount — a transaction-scoped advisory lock (releases on commit/rollback)
-    // plus the row lock. Without this, two concurrent settlements both read the
-    // stale amount and one overwrites the other (lost update).
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtextextended(${bidRow.listingId}::text, 0))`,
-    );
-    listingRow = (
-      await tx
-        .select()
-        .from(schema.listings)
-        .where(eq(schema.listings.id, bidRow.listingId))
-        .for("update")
-    )[0];
-  }
-
-  // 5. Decide.
+  // 3. Decide (state machine only — no arithmetic).
   const decision = decideFulfilment({
     webhookAlreadyProcessed,
     providerPaymentIntent: event.providerPaymentIntent,
@@ -112,86 +105,111 @@ async function runFulfilment(
     bid: bidRow ? toBidState(bidRow) : null,
     payment: paymentRow ? toPaymentState(paymentRow) : null,
     listing: listingRow ? toListingState(listingRow) : null,
-    config,
-    now,
   });
 
-  // 6. Apply.
-  if (decision.kind === "fulfil") {
-    const w = decision.writes;
+  const outcome =
+    decision.kind === "proceed"
+      ? await applyFulfilment(tx, decision.plan, config, now, event)
+      : decision;
 
-    const [piConflict] = await tx
-      .select({ id: schema.bids.id })
-      .from(schema.bids)
-      .where(
-        and(
-          eq(schema.bids.providerPaymentIntent, event.providerPaymentIntent),
-          eq(schema.bids.status, "settled"),
-          ne(schema.bids.id, w.bidId),
-        ),
-      );
-    if (piConflict) {
-      const detail = `payment_intent ${event.providerPaymentIntent} already settled on bid ${piConflict.id}`;
-      await markProcessed(tx, event, now, detail);
-      return { kind: "anomaly", reason: "pi_conflict", detail };
-    }
+  // 4. Mark the webhook event processed for terminal outcomes. `bid_missing`
+  // stays unprocessed so reconcile-stripe / a retry picks it up.
+  if (isTerminal(outcome)) {
+    await markProcessed(tx, event, now, outcome.kind === "anomaly" ? outcome.detail : null);
+  }
+  return outcome;
+}
 
-    await tx
-      .update(schema.bids)
-      .set({
-        previousAmountOre: w.bid.previousAmountOre,
-        resultingAmountOre: w.bid.resultingAmountOre,
-        status: "settled",
-        settledAt: w.settledAt,
-        providerPaymentIntent: w.providerPaymentIntent,
-      })
-      .where(eq(schema.bids.id, w.bidId));
+async function applyFulfilment(
+  tx: Tx,
+  plan: FulfilmentPlan,
+  config: ThresholdConfig,
+  now: Date,
+  event: SettledPaymentEvent,
+): Promise<FulfilmentDecision> {
+  // Claim the bid. The 2nd delivery of a settled payment gets 0 rows here.
+  const claimed = await tx
+    .update(schema.bids)
+    .set({ status: "settled", settledAt: now, providerPaymentIntent: plan.providerPaymentIntent })
+    .where(and(eq(schema.bids.id, plan.bidId), eq(schema.bids.status, "pending")))
+    .returning({ id: schema.bids.id });
 
-    await tx
-      .update(schema.payments)
-      .set({
-        status: "settled",
-        method: w.method,
-        settledAt: w.settledAt,
-        providerPaymentIntent: w.providerPaymentIntent,
-        rawEvent: event.payload ?? {},
-      })
-      .where(eq(schema.payments.id, w.paymentId));
+  if (claimed.length === 0) {
+    return { kind: "skip", reason: "already_settled" };
+  }
 
+  // Atomic increment against the latest committed amount. The row lock this
+  // takes is held until commit, so the follow-up status write is race-free.
+  const [listing] = await tx
+    .update(schema.listings)
+    .set({
+      currentAmountOre: sql`${schema.listings.currentAmountOre} + ${plan.deltaOre}`,
+      firstActiveAt: sql`coalesce(${schema.listings.firstActiveAt}, ${now}::timestamptz)`,
+      lastBidAt: now,
+      updatedAt: now,
+    })
+    .where(eq(schema.listings.id, plan.listingId))
+    .returning({
+      currentAmountOre: schema.listings.currentAmountOre,
+      status: schema.listings.status,
+    });
+
+  if (!listing) {
+    throw new Error(`fulfil: listing ${plan.listingId} vanished mid-transaction`);
+  }
+
+  // Go active — but never un-hide / un-remove a moderated listing.
+  if (listing.status !== "active" && listing.status !== "hidden" && listing.status !== "removed") {
     await tx
       .update(schema.listings)
-      .set({
-        currentAmountOre: w.listing.currentAmountOre,
-        status: w.listing.status,
-        firstActiveAt: w.listing.firstActiveAt,
-        lastBidAt: w.listing.lastBidAt,
-        updatedAt: now,
-      })
-      .where(eq(schema.listings.id, w.listingId));
-
-    if (w.flag) {
-      await tx.insert(schema.moderationActions).values({
-        listingId: w.listingId,
-        actor: "system",
-        action: "flag",
-        reason: w.flag,
-      });
-    }
+      .set({ status: "active" })
+      .where(eq(schema.listings.id, plan.listingId));
   }
 
-  // 7. Mark the webhook event processed for terminal outcomes. `bid_missing`
-  // deliberately stays unprocessed so reconcile-stripe / a retry picks it up.
-  const terminal =
-    decision.kind === "fulfil" ||
-    decision.kind === "anomaly" ||
-    (decision.kind === "skip" &&
-      (decision.reason === "already_settled" || decision.reason === "webhook_replayed"));
+  const resultingAmountOre = listing.currentAmountOre;
+  const previousAmountOre = resultingAmountOre - plan.deltaOre;
 
-  if (terminal) {
-    await markProcessed(tx, event, now, decision.kind === "anomaly" ? decision.detail : null);
+  await tx
+    .update(schema.bids)
+    .set({ previousAmountOre, resultingAmountOre })
+    .where(eq(schema.bids.id, plan.bidId));
+
+  await tx
+    .update(schema.payments)
+    .set({
+      status: "settled",
+      method: plan.method,
+      settledAt: now,
+      providerPaymentIntent: plan.providerPaymentIntent,
+      rawEvent: event.payload ?? {},
+    })
+    .where(eq(schema.payments.id, plan.paymentId));
+
+  // ADR-0005: we never withhold a paid rank. If the resulting amount somehow
+  // lands below the current floor (a config change), fulfil anyway and flag.
+  const required = checkAmount({
+    previousAmountOre: ore(previousAmountOre),
+    targetAmountOre: ore(resultingAmountOre),
+    config,
+  });
+  if (!required.ok) {
+    await tx.insert(schema.moderationActions).values({
+      listingId: plan.listingId,
+      actor: "system",
+      action: "flag",
+      reason: `resulting ${resultingAmountOre} below required ${required.error.requiredOre} at fulfilment`,
+    });
   }
 
-  return decision;
+  return { kind: "proceed", plan };
+}
+
+function isTerminal(d: FulfilmentDecision): boolean {
+  return (
+    d.kind === "proceed" ||
+    d.kind === "anomaly" ||
+    (d.kind === "skip" && (d.reason === "already_settled" || d.reason === "webhook_replayed"))
+  );
 }
 
 function eventPredicate(event: SettledPaymentEvent) {

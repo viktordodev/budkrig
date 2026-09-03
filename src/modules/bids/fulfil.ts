@@ -1,16 +1,15 @@
-import { ore, requiredMinimum } from "@/lib/money";
-import type { ThresholdConfig } from "./threshold";
 import type { BidState, ListingState, PaymentMethod, PaymentState } from "./types";
 
 /**
  * Flow 1b (fulfilment, core-flows). Pure decision: given a settled-payment
- * event plus the rows the caller has loaded (with the listing locked FOR
- * UPDATE), decide what to write — or that this is a replay / an anomaly.
+ * event plus the rows the caller loaded, decide whether to proceed, skip
+ * (replay), or flag an anomaly.
  *
- * The transaction glue (BEGIN, the SELECT ... FOR UPDATE, applying the writes,
- * COMMIT) lives in the server adapter and is covered by integration tests.
- * This function owns the tricky part: idempotency, state checks, and
- * recomputing amounts against the locked row (ADR-0004 / ADR-0005).
+ * It deliberately does NOT compute amounts. The adapter applies the ledger
+ * write as an atomic `UPDATE listings SET current_amount_ore = current_amount_ore
+ * + delta … RETURNING` (ADR-0004 / ADR-0005) — the only race-free way to chain
+ * concurrent settlements on one listing. `decideFulfilment` owns the state
+ * machine; the adapter owns the arithmetic.
  */
 export interface FulfilmentContext {
   /** True if this Stripe event id was already recorded + processed. */
@@ -20,23 +19,21 @@ export interface FulfilmentContext {
   /** The bid found by our eventKey / Stripe metadata. */
   readonly bid: BidState | null;
   readonly payment: PaymentState | null;
-  /** listing = bid.listingId, loaded FOR UPDATE. */
+  /** listing = bid.listingId (a plain read — existence check only). */
   readonly listing: ListingState | null;
-  readonly config: ThresholdConfig;
-  readonly now: Date;
 }
 
 export type FulfilmentDecision =
   | { readonly kind: "skip"; readonly reason: SkipReason }
   | { readonly kind: "anomaly"; readonly reason: AnomalyReason; readonly detail: string }
-  | { readonly kind: "fulfil"; readonly writes: FulfilmentWrites };
+  | { readonly kind: "proceed"; readonly plan: FulfilmentPlan };
 
 export type SkipReason =
   /** Stripe re-delivered an event we already handled. */
   | "webhook_replayed"
   /** No bid for this event yet — reconcile-stripe / a bounded retry handles it. */
   | "bid_missing"
-  /** This exact bid+PI is already settled — idempotent replay. */
+  /** This exact bid + payment_intent is already settled — idempotent replay. */
   | "already_settled";
 
 export type AnomalyReason =
@@ -46,23 +43,13 @@ export type AnomalyReason =
   | "listing_missing"
   | "amount_mismatch";
 
-export interface FulfilmentWrites {
+export interface FulfilmentPlan {
   readonly bidId: string;
   readonly paymentId: string;
   readonly listingId: string;
+  readonly deltaOre: number;
   readonly providerPaymentIntent: string;
   readonly method: PaymentMethod;
-  readonly settledAt: Date;
-  /** Final ledger amounts, recomputed against the locked listing. */
-  readonly bid: { readonly previousAmountOre: number; readonly resultingAmountOre: number };
-  readonly listing: {
-    readonly status: "active" | "hidden" | "removed";
-    readonly currentAmountOre: number;
-    readonly firstActiveAt: Date;
-    readonly lastBidAt: Date;
-  };
-  /** Non-fatal note for the operator queue, if anything looked off. */
-  readonly flag?: string;
 }
 
 export function decideFulfilment(ctx: FulfilmentContext): FulfilmentDecision {
@@ -112,46 +99,15 @@ export function decideFulfilment(ctx: FulfilmentContext): FulfilmentDecision {
     };
   }
 
-  // Recompute against the LOCKED current amount: the pending bid's provisional
-  // previous/resulting are stale if the listing moved since the claim (ADR-0005).
-  // `delta` is fixed — that's what Stripe charged.
-  const previousAmountOre = ctx.listing.currentAmountOre;
-  const resultingAmountOre = previousAmountOre + ctx.bid.deltaOre;
-
-  const required = requiredMinimum({
-    previousAmount: ore(previousAmountOre),
-    newListingMin: ctx.config.newListingMinOre,
-    minIncrement: ctx.config.minIncrementOre,
-  });
-  const flag =
-    resultingAmountOre < required
-      ? `resulting ${resultingAmountOre} below required ${required} at fulfilment — fulfilling anyway per ADR-0005`
-      : undefined;
-
-  const status: "active" | "hidden" | "removed" =
-    ctx.listing.status === "hidden"
-      ? "hidden"
-      : ctx.listing.status === "removed"
-        ? "removed"
-        : "active";
-
   return {
-    kind: "fulfil",
-    writes: {
+    kind: "proceed",
+    plan: {
       bidId: ctx.bid.id,
       paymentId: ctx.payment.id,
       listingId: ctx.listing.id,
+      deltaOre: ctx.bid.deltaOre,
       providerPaymentIntent: ctx.providerPaymentIntent,
       method: ctx.method,
-      settledAt: ctx.now,
-      bid: { previousAmountOre, resultingAmountOre },
-      listing: {
-        status,
-        currentAmountOre: resultingAmountOre,
-        firstActiveAt: ctx.listing.firstActiveAt ?? ctx.now,
-        lastBidAt: ctx.now,
-      },
-      ...(flag ? { flag } : {}),
     },
   };
 }
