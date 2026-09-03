@@ -73,6 +73,12 @@ jobs:
     needs: [verify, docker]
     steps:
       - name: Call Coolify deploy webhook
+        env:
+          WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
+          TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
-          curl -fsSL -X POST "${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
+          if [ -z "$WEBHOOK" ]; then
+            echo "COOLIFY_DEPLOY_WEBHOOK not set — skipping deploy trigger."
+            exit 0
+          fi
+          curl -fsSL -X POST "$WEBHOOK" -H "Authorization: Bearer $TOKEN"
