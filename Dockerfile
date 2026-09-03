@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1.7
 # One image, two roles (ADR-0002 / ADR-0010 / ADR-0011):
-#   web:    node server.js            (Next.js standalone)
-#   worker: node dist/workers/main.js  (tsup bundle)
-# The start command is set per-service in Coolify. Migrations run as a Coolify
-# pre-deploy command: `pnpm db:migrate`.
+#   web:    node server.js            (Next.js standalone)  <- default CMD
+#   worker: node dist/workers/main.js  (tsup bundle)         <- Coolify overrides
+# Migrations: Coolify pre-deploy command  `node_modules/.bin/drizzle-kit migrate`
+# (drizzle-kit + drizzle.config.ts + the migrations folder are all in the image).
+# Lives at the repo root so Coolify's default Dockerfile detection just works.
 
 # ---- deps ----------------------------------------------------------------
 FROM node:24-bookworm-slim AS deps

@@ -28,7 +28,8 @@ revisit.
 
 ## The image
 
-Multi‑stage `Dockerfile` (`docker/Dockerfile`):
+Multi‑stage `Dockerfile` (repo root, so Coolify's default detection works;
+`docker/` keeps compose + db init):
 
 1. `deps` — install with a locked lockfile.
 2. `build` — `next build` with `output: "standalone"`, plus `tsc` for the

@@ -62,7 +62,8 @@ Chosen VPS provider/region is Open question Q6 (Hetzner DE/FI vs a Swedish host)
   only if that stops being true.
 
 ### Follow‑ups
-- `docker/Dockerfile`, `docker/compose.yaml` (local parity), `.github/workflows/ci.yml`.
+- `Dockerfile` (repo root), `docker/compose.yaml` (local parity), `.github/workflows/ci.yml`.
+- `docs/runbooks/coolify-setup.md` — concrete service/env/migration config.
 - `/healthz` + `/readyz` route handlers.
 - Coolify: two projects (`preview`, `production`), webhook deploy, pre‑deploy
   migrate command, resource limits, log drain.
