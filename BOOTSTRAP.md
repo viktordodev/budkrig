@@ -22,9 +22,9 @@ pnpm build` all pass locally.
   board shows the seed rows.
 - Wire error tracking — set `SENTRY_DSN` (GlitchTip or self-hosted Sentry) and
   finish `src/instrumentation.ts`.
-- Coolify: `preview` + `production` projects, Postgres + Redis services,
-  `pnpm db:migrate` as the pre-deploy command, and the deploy-webhook secrets
-  (`COOLIFY_DEPLOY_WEBHOOK`, `COOLIFY_TOKEN`) in GitHub Actions.
+- Coolify: follow [`docs/runbooks/coolify-setup.md`](docs/runbooks/coolify-setup.md)
+  — web + worker services, Postgres + Redis, `node_modules/.bin/drizzle-kit
+  migrate` as the pre-deploy command, env vars, deploy-webhook secrets.
 - Uptime monitor on a **separate** host hitting `/healthz`.
 - **Backup + restore rehearsal** once by hand, then automated; write
   `docs/runbooks/restore.md`.
