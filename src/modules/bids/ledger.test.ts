@@ -52,7 +52,7 @@ describe("currentAmountFromLedger", () => {
     expect(currentAmountFromLedger(entries)).toBe(500);
   });
 
-  it("takes the most recent settled bid by settledAt, not array order", () => {
+  it("takes the largest resulting amount, not array order or settledAt", () => {
     const entries = [settled(600, 400, 30), settled(0, 200, 10), settled(200, 400, 20)];
     expect(currentAmountFromLedger(entries)).toBe(1000);
   });

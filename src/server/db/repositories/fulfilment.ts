@@ -15,17 +15,18 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 /**
  * The fulfilment transaction (core-flows Flow 1b). One DB transaction:
  * record the webhook event (idempotency), load bid/payment/listing, run the
- * pure `decideFulfilment` for the state machine, then apply the ledger write:
+ * pure `decideFulfilment` state machine, then apply the ledger write:
  *
- *  1. claim the bid: UPDATE bids ... WHERE id = ? AND status = 'pending'
- *     — the bid row is the mutex; a 2nd delivery gets 0 rows -> already_settled
+ *  1. claim the pending bid by stamping provider_payment_intent
+ *     (WHERE status='pending' AND provider_payment_intent IS NULL) — the row
+ *     lock + predicate is the mutex; a repeat delivery gets 0 rows
  *  2. atomically bump the listing: SET current_amount_ore = current_amount_ore
- *     + delta ... RETURNING — Postgres reads the latest committed value at lock
- *     acquisition, so concurrent settlements chain (no read-then-write race)
- *  3. write the bid's ledger amounts from the RETURNING value
+ *     + delta ... RETURNING — Postgres reads the latest committed value when it
+ *     takes the row lock, so concurrent settlements chain with no read race
+ *  3. flip the bid to settled WITH previous/resulting from the RETURNING value
  *
  * Idempotent on the Stripe event id and on bid + payment_intent (the
- * bids_settled_pi_uq partial index).
+ * bids_settled_pi_uq partial index, surfaced as a pi_conflict anomaly).
  */
 export function createFulfilmentRepository(
   db: Db,
@@ -273,7 +274,16 @@ function toListingState(row: ListingRow): ListingState {
 }
 
 function isUniqueViolation(err: unknown): boolean {
-  return typeof err === "object" && err !== null && "code" in err && err.code === "23505";
+  // drizzle wraps the driver error; the PostgresError with `.code` is on `.cause`
+  // (possibly nested).
+  for (let e: unknown = err, depth = 0; e && depth < 5; depth++) {
+    if (typeof e === "object" && "code" in e && (e as { code?: unknown }).code === "23505") {
+      return true;
+    }
+    e =
+      typeof e === "object" && e !== null && "cause" in e ? (e as { cause?: unknown }).cause : null;
+  }
+  return false;
 }
 
 function messageOf(err: unknown): string {
