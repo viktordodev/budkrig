@@ -4,7 +4,7 @@ import type { Clock, FulfilmentRepository, SettledPaymentEvent } from "@/modules
 import type { ThresholdConfig } from "@/modules/bids/threshold";
 import type { BidState, ListingState, PaymentState } from "@/modules/bids/types";
 import { logger } from "@/server/observability/logger";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../schema";
 
@@ -76,7 +76,7 @@ async function runFulfilment(
     webhookAlreadyProcessed = existing?.processedAt != null;
   }
 
-  // 2–4. Load the rows the decision needs; lock the listing.
+  // 2–4. Load the rows the decision needs.
   const [bidRow] = await tx
     .select()
     .from(schema.bids)
@@ -86,15 +86,23 @@ async function runFulfilment(
     ? (await tx.select().from(schema.payments).where(eq(schema.payments.bidId, bidRow.id)))[0]
     : undefined;
 
-  const listingRow = bidRow
-    ? (
-        await tx
-          .select()
-          .from(schema.listings)
-          .where(eq(schema.listings.id, bidRow.listingId))
-          .for("update")
-      )[0]
-    : undefined;
+  let listingRow: ListingRow | undefined;
+  if (bidRow) {
+    // Serialise ALL fulfilment for this listing before we read its current
+    // amount — a transaction-scoped advisory lock (releases on commit/rollback)
+    // plus the row lock. Without this, two concurrent settlements both read the
+    // stale amount and one overwrites the other (lost update).
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${bidRow.listingId}::text, 0))`,
+    );
+    listingRow = (
+      await tx
+        .select()
+        .from(schema.listings)
+        .where(eq(schema.listings.id, bidRow.listingId))
+        .for("update")
+    )[0];
+  }
 
   // 5. Decide.
   const decision = decideFulfilment({
