@@ -1,0 +1,21 @@
+# Keep the build context small and secrets out of image layers.
+node_modules
+.next
+dist
+coverage
+playwright-report
+test-results
+
+.git
+.github
+.vscode
+
+.env
+.env.*
+!.env.example
+
+docker/data
+*.log
+*.md
+docs
+.claude
