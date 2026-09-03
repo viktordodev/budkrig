@@ -8,7 +8,25 @@
     "empty": "Inga listningar än. Var först.",
     "rank": "Plats {rank}",
     "clicks": "{count, plural, =0 {inga klick} one {# klick} other {# klick}}",
-    "unavailable": "Topplistan värms upp — försök igen om en stund."
+    "unavailable": "Topplistan värms upp — försök igen om en stund.",
+    "claimCta": "Ta en plats"
+  },
+  "claim": {
+    "heading": "Ta en plats på topplistan",
+    "intro": "Din länk sorteras efter hur mycket du betalat. Beloppet återbetalas inte och priset går bara uppåt.",
+    "target": {
+      "label": "Produkt-URL eller @handle",
+      "placeholder": "https://exempel.se  eller  @dittkonto",
+      "hint": "En @handle länkar till X-profilen."
+    },
+    "category": "Kategori",
+    "title": "Rubrik",
+    "description": "Beskrivning",
+    "amount": "Belopp (kr)",
+    "email": "E-post",
+    "consent": "Jag samtycker till att tjänsten börjar utföras omedelbart och att jag därmed förlorar min ångerrätt. Betalningen återbetalas inte.",
+    "submit": "Fortsätt till betalning",
+    "submitting": "Öppnar betalning …"
   },
   "footer": {
     "builtWith": "Prototyp — se docs/ för arkitektur och beslut."

@@ -5,6 +5,8 @@ import { createFulfilmentRepository } from "@/server/db/repositories/fulfilment"
 import { requestLogger } from "@/server/observability/request-id";
 import { normalizeStripeEvent } from "@/server/payments/normalize";
 import { constructWebhookEvent } from "@/server/payments/stripe";
+import { CACHE_KEYS, invalidateCache } from "@/server/redis/cache";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 // Needs the raw body + a stable URL, so it's a Route Handler, not a Server
@@ -38,6 +40,11 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const repo = createFulfilmentRepository(db, biddingConfig, systemClock);
   const decision = await repo.fulfil(settled);
+
+  if (decision.kind === "proceed") {
+    await invalidateCache(CACHE_KEYS.board("all"));
+    revalidatePath("/");
+  }
 
   log.info(
     { stripeEventId: event.id, type: event.type, decision: decision.kind },
