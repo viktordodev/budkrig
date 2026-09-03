@@ -153,7 +153,9 @@ async function applyFulfilment(
     .update(schema.listings)
     .set({
       currentAmountOre: sql`${schema.listings.currentAmountOre} + ${plan.deltaOre}`,
-      firstActiveAt: sql`coalesce(${schema.listings.firstActiveAt}, ${now}::timestamptz)`,
+      // set-once: keep an existing first_active_at, else stamp now (ISO string —
+      // a bare Date isn't serialisable inside a raw sql fragment)
+      firstActiveAt: sql`coalesce(${schema.listings.firstActiveAt}, ${now.toISOString()}::timestamptz)`,
       lastBidAt: now,
       updatedAt: now,
     })
