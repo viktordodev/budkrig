@@ -124,9 +124,12 @@ export const bids = pgTable(
       .notNull()
       .references(() => listings.id),
 
-    previousAmountOre: bigint("previous_amount_ore", { mode: "number" }).notNull(),
+    // delta is fixed at claim time (what Stripe is asked to charge). previous /
+    // resulting are the ledger amounts — NULL while pending, written once at
+    // settlement against the locked listing row (ADR-0004 / ADR-0005).
     deltaOre: bigint("delta_ore", { mode: "number" }).notNull(),
-    resultingAmountOre: bigint("resulting_amount_ore", { mode: "number" }).notNull(),
+    previousAmountOre: bigint("previous_amount_ore", { mode: "number" }),
+    resultingAmountOre: bigint("resulting_amount_ore", { mode: "number" }),
 
     status: bidStatus("status").notNull().default("pending"),
 
@@ -148,9 +151,16 @@ export const bids = pgTable(
       .on(t.providerPaymentIntent)
       .where(sql`${t.status} = 'settled' and ${t.providerPaymentIntent} is not null`),
     deltaPositive: check("bids_delta_positive", sql`${t.deltaOre} > 0`),
+    // Amounts are both NULL (pending) or both set and consistent (settled).
     arithmetic: check(
       "bids_arithmetic",
-      sql`${t.resultingAmountOre} = ${t.previousAmountOre} + ${t.deltaOre}`,
+      sql`(${t.previousAmountOre} is null and ${t.resultingAmountOre} is null)
+          or ${t.resultingAmountOre} = ${t.previousAmountOre} + ${t.deltaOre}`,
+    ),
+    // A settled bid must have its ledger amounts.
+    settledHasAmounts: check(
+      "bids_settled_has_amounts",
+      sql`${t.status} <> 'settled' or (${t.previousAmountOre} is not null and ${t.resultingAmountOre} is not null)`,
     ),
   }),
 );

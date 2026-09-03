@@ -1,10 +1,6 @@
-import { ore } from "@/lib/money";
 import { describe, expect, it } from "vitest";
 import { type FulfilmentContext, decideFulfilment } from "./fulfil";
 import type { BidState, ListingState, PaymentState } from "./types";
-
-const NOW = new Date("2026-09-03T12:00:00.000Z");
-const config = { newListingMinOre: ore(500), minIncrementOre: ore(100) };
 
 const bid = (over: Partial<BidState> = {}): BidState => ({
   id: "bid_1",
@@ -40,8 +36,6 @@ const ctx = (over: Partial<FulfilmentContext> = {}): FulfilmentContext => ({
   bid: bid(),
   payment: payment(),
   listing: listing(),
-  config,
-  now: NOW,
   ...over,
 });
 
@@ -57,18 +51,16 @@ describe("decideFulfilment — skips & anomalies", () => {
     expect(decideFulfilment(ctx({ bid: null }))).toEqual({ kind: "skip", reason: "bid_missing" });
   });
 
-  it("skips an already-settled bid with the same payment_intent (idempotent replay)", () => {
-    const d = decideFulfilment(
-      ctx({ bid: bid({ status: "settled", providerPaymentIntent: "pi_123" }) }),
-    );
-    expect(d).toEqual({ kind: "skip", reason: "already_settled" });
+  it("skips an already-settled bid with the same payment_intent", () => {
+    expect(
+      decideFulfilment(ctx({ bid: bid({ status: "settled", providerPaymentIntent: "pi_123" }) })),
+    ).toEqual({ kind: "skip", reason: "already_settled" });
   });
 
   it("flags a settled bid carrying a different payment_intent", () => {
-    const d = decideFulfilment(
-      ctx({ bid: bid({ status: "settled", providerPaymentIntent: "pi_OLD" }) }),
-    );
-    expect(d).toMatchObject({ kind: "anomaly", reason: "pi_conflict" });
+    expect(
+      decideFulfilment(ctx({ bid: bid({ status: "settled", providerPaymentIntent: "pi_OLD" }) })),
+    ).toMatchObject({ kind: "anomaly", reason: "pi_conflict" });
   });
 
   it("flags a bid in a terminal state", () => {
@@ -99,87 +91,27 @@ describe("decideFulfilment — skips & anomalies", () => {
   });
 });
 
-describe("decideFulfilment — fulfils", () => {
-  it("activates a brand-new listing and stamps first_active_at", () => {
-    const d = decideFulfilment(ctx());
-    expect(d).toEqual({
-      kind: "fulfil",
-      writes: {
+describe("decideFulfilment — proceed", () => {
+  it("returns a plan carrying the ids, delta and payment details", () => {
+    expect(decideFulfilment(ctx())).toEqual({
+      kind: "proceed",
+      plan: {
         bidId: "bid_1",
         paymentId: "pay_1",
         listingId: "lst_1",
+        deltaOre: 500,
         providerPaymentIntent: "pi_123",
         method: "card",
-        settledAt: NOW,
-        bid: { previousAmountOre: 0, resultingAmountOre: 500 },
-        listing: {
-          status: "active",
-          currentAmountOre: 500,
-          firstActiveAt: NOW,
-          lastBidAt: NOW,
-        },
       },
     });
   });
 
-  it("raises an active listing and keeps the original first_active_at", () => {
-    const firstActiveAt = new Date("2026-08-01T00:00:00.000Z");
-    const d = decideFulfilment(
-      ctx({
-        bid: bid({ deltaOre: 3_000 }),
-        payment: payment({ amountOre: 3_000 }),
-        listing: listing({ status: "active", currentAmountOre: 12_000, firstActiveAt }),
-      }),
-    );
-    expect(d).toMatchObject({
-      kind: "fulfil",
-      writes: {
-        bid: { previousAmountOre: 12_000, resultingAmountOre: 15_000 },
-        listing: { currentAmountOre: 15_000, firstActiveAt, status: "active" },
-      },
-    });
-  });
-
-  it("recomputes against the locked amount when the board moved since the claim", () => {
-    // claimed when the listing was at 800 (delta 200); by settlement it's at 2000
-    const d = decideFulfilment(
-      ctx({
-        bid: bid({ deltaOre: 200 }),
-        payment: payment({ amountOre: 200 }),
-        listing: listing({ status: "active", currentAmountOre: 2_000, firstActiveAt: NOW }),
-      }),
-    );
-    expect(d).toMatchObject({
-      kind: "fulfil",
-      writes: { bid: { previousAmountOre: 2_000, resultingAmountOre: 2_200 } },
-    });
-  });
-
-  it("records the bid + payment but does not un-hide a hidden/removed listing", () => {
-    for (const status of ["hidden", "removed"] as const) {
+  it("proceeds regardless of the listing's current amount / status (the adapter does the arithmetic)", () => {
+    for (const status of ["pending_payment", "active", "hidden", "removed"] as const) {
       const d = decideFulfilment(
-        ctx({ listing: listing({ status, currentAmountOre: 5_000, firstActiveAt: NOW }) }),
+        ctx({ listing: listing({ status, currentAmountOre: 99_999, firstActiveAt: new Date() }) }),
       );
-      expect(d).toMatchObject({
-        kind: "fulfil",
-        writes: { listing: { status, currentAmountOre: 5_500 } },
-      });
-    }
-  });
-
-  it("still fulfils but flags when the resulting amount is below the required minimum", () => {
-    // contrived: delta smaller than the increment (a config change / bug)
-    const d = decideFulfilment(
-      ctx({
-        bid: bid({ deltaOre: 50 }),
-        payment: payment({ amountOre: 50 }),
-        listing: listing({ status: "active", currentAmountOre: 1_000, firstActiveAt: NOW }),
-      }),
-    );
-    expect(d.kind).toBe("fulfil");
-    if (d.kind === "fulfil") {
-      expect(d.writes.bid.resultingAmountOre).toBe(1_050);
-      expect(d.writes.flag).toMatch(/below required/);
+      expect(d.kind).toBe("proceed");
     }
   });
 });

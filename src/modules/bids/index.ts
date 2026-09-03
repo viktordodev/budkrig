@@ -10,12 +10,15 @@
 export { planClaim } from "./claim";
 export type { ClaimPlan, ClaimRequest } from "./claim";
 
+export { systemClock } from "./ports";
+export type { Clock, FulfilmentRepository, SettledPaymentEvent } from "./ports";
+
 export { decideFulfilment } from "./fulfil";
 export type {
   AnomalyReason,
   FulfilmentContext,
   FulfilmentDecision,
-  FulfilmentWrites,
+  FulfilmentPlan,
   SkipReason,
 } from "./fulfil";
 
@@ -33,6 +36,7 @@ export type {
   BidStatus,
   ListingState,
   ListingStatus,
+  PaymentMethod,
   PaymentState,
   PaymentStatus,
 } from "./types";
