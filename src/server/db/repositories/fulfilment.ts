@@ -5,7 +5,7 @@ import type { Clock, FulfilmentRepository, SettledPaymentEvent } from "@/modules
 import { type ThresholdConfig, checkAmount } from "@/modules/bids/threshold";
 import type { BidState, ListingState, PaymentState } from "@/modules/bids/types";
 import { logger } from "@/server/observability/logger";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../schema";
 
@@ -127,11 +127,20 @@ async function applyFulfilment(
   now: Date,
   event: SettledPaymentEvent,
 ): Promise<FulfilmentDecision> {
-  // Claim the bid. The 2nd delivery of a settled payment gets 0 rows here.
+  // Claim the bid by stamping the payment_intent while it's still `pending`
+  // (status can't flip to `settled` before the amounts are known — the
+  // bids_settled_has_amounts CHECK). A concurrent / repeat delivery finds
+  // provider_payment_intent already set and gets 0 rows.
   const claimed = await tx
     .update(schema.bids)
-    .set({ status: "settled", settledAt: now, providerPaymentIntent: plan.providerPaymentIntent })
-    .where(and(eq(schema.bids.id, plan.bidId), eq(schema.bids.status, "pending")))
+    .set({ providerPaymentIntent: plan.providerPaymentIntent })
+    .where(
+      and(
+        eq(schema.bids.id, plan.bidId),
+        eq(schema.bids.status, "pending"),
+        isNull(schema.bids.providerPaymentIntent),
+      ),
+    )
     .returning({ id: schema.bids.id });
 
   if (claimed.length === 0) {
@@ -169,9 +178,10 @@ async function applyFulfilment(
   const resultingAmountOre = listing.currentAmountOre;
   const previousAmountOre = resultingAmountOre - plan.deltaOre;
 
+  // Now the bid becomes part of the settled ledger — status + amounts together.
   await tx
     .update(schema.bids)
-    .set({ previousAmountOre, resultingAmountOre })
+    .set({ status: "settled", settledAt: now, previousAmountOre, resultingAmountOre })
     .where(eq(schema.bids.id, plan.bidId));
 
   await tx
