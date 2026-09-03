@@ -140,6 +140,12 @@ export const bids = pgTable(
 
     clientIpHash: text("client_ip_hash"),
 
+    // EU right-of-withdrawal waiver captured at checkout (ADR-0007). The version
+    // string points at the wording shown; the wording itself is versioned in
+    // code. Required for a consumer purchase.
+    withdrawalConsentVersion: text("withdrawal_consent_version"),
+    withdrawalConsentAt: timestamp("withdrawal_consent_at", { withTimezone: true }),
+
     createdAt: now(), // the date used for the "Today" board
     settledAt: timestamp("settled_at", { withTimezone: true }),
   },

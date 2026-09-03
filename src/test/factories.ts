@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { SettledPaymentEvent } from "@/modules/bids/ports";
+import { type Ore, ore } from "@/lib/money";
+import type { ClaimInput, SettledPaymentEvent } from "@/modules/bids/ports";
 import type { ListingStatus } from "@/modules/bids/types";
 import * as schema from "@/server/db/schema";
 import { eq } from "drizzle-orm";
@@ -86,6 +87,23 @@ export async function makePendingBid(
     "payment",
   );
   return { bid, payment, eventKey };
+}
+
+export function claimInput(over: Partial<ClaimInput> = {}): ClaimInput {
+  const targetAmountOre: Ore = over.targetAmountOre ?? ore(500);
+  return {
+    slug: over.slug ?? `claim-${randomUUID().slice(0, 8)}.se`,
+    kind: over.kind ?? "url",
+    targetUrl: over.targetUrl ?? "https://claim.example",
+    title: over.title ?? "A claimed listing",
+    description: over.description ?? "Claimed in a test.",
+    categorySlug: over.categorySlug ?? "ovrigt",
+    ownerEmail: over.ownerEmail ?? "owner@example.com",
+    targetAmountOre,
+    clientIpHash: over.clientIpHash ?? "iphash",
+    eventKey: over.eventKey ?? `evt-key-${randomUUID()}`,
+    withdrawalConsentVersion: over.withdrawalConsentVersion ?? "test-consent-v1",
+  };
 }
 
 export function stripeEvent(
