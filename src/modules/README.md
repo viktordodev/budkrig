@@ -9,7 +9,7 @@ Planned modules:
 | Module | Owns | Key files (to build) |
 | --- | --- | --- |
 | `listings/` | Board read models, listing lifecycle (`draft → pending_payment → active ⇄ hidden → removed`), slug derivation, position query | `board.ts`, `listing.ts`, `slug.ts`, `ports.ts` |
-| `bids/` | The append-only ledger, threshold rule (ADR-0005), rank derivation, **fulfilment transaction** (ADR-0004, core-flows Flow 1b), reconciliation | **built:** `threshold` · `ledger` · `rank` · `claim` (Flow 1a) · `fulfil` (Flow 1b decision) · `ports` (`FulfilmentRepository` → `server/db/repositories/fulfilment.ts`) · **next:** `reconcile`, claim-side repo |
+| `bids/` | The append-only ledger, threshold rule (ADR-0005), rank derivation, **claim + fulfilment transactions** (ADR-0004, core-flows Flow 1a/1b), reconciliation | **built:** `threshold` · `ledger` · `rank` · `claim` (Flow 1a) · `fulfil` (Flow 1b decision) · `ports` (`ClaimRepository` + `FulfilmentRepository` → `server/db/repositories/{claim,fulfilment}.ts`) · **next:** `reconcile`, receipt/invoice |
 | `payments/` | Provider-agnostic orchestration: start a checkout for a bid, interpret a settlement event, VAT/tax mode mapping, invoice numbering | `checkout.ts`, `settlement.ts`, `tax.ts`, `ports.ts` |
 | `moderation/` | Pre-publish auto-checks, operator queue actions, denylist, reports (ADR-0012) | `checks.ts`, `queue.ts`, `denylist.ts`, `ports.ts` |
 | `activity/` | The `pulse` payload (top-N, viewer position, activity tail, counters), presence (post-v1) (ADR-0009) | `pulse.ts`, `presence.ts`, `ports.ts` |
