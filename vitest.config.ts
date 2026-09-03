@@ -10,7 +10,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
-    // Integration tests (Testcontainers) land in Milestone 2 with their own
-    // project config; for now this is unit + property tests only (ADR-0014).
+    // Integration tests (Testcontainers, real Postgres) run in their own config
+    // and CI job — they need a Docker daemon. See vitest.integration.config.ts.
+    exclude: ["**/*.integration.test.ts", "node_modules/**", "dist/**", ".next/**"],
   },
 });

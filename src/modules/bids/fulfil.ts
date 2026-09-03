@@ -1,6 +1,6 @@
 import { ore, requiredMinimum } from "@/lib/money";
 import type { ThresholdConfig } from "./threshold";
-import type { BidState, ListingState, PaymentState } from "./types";
+import type { BidState, ListingState, PaymentMethod, PaymentState } from "./types";
 
 /**
  * Flow 1b (fulfilment, core-flows). Pure decision: given a settled-payment
@@ -16,7 +16,7 @@ export interface FulfilmentContext {
   /** True if this Stripe event id was already recorded + processed. */
   readonly webhookAlreadyProcessed: boolean;
   readonly providerPaymentIntent: string;
-  readonly method: string;
+  readonly method: PaymentMethod;
   /** The bid found by our eventKey / Stripe metadata. */
   readonly bid: BidState | null;
   readonly payment: PaymentState | null;
@@ -51,7 +51,7 @@ export interface FulfilmentWrites {
   readonly paymentId: string;
   readonly listingId: string;
   readonly providerPaymentIntent: string;
-  readonly method: string;
+  readonly method: PaymentMethod;
   readonly settledAt: Date;
   /** Final ledger amounts, recomputed against the locked listing. */
   readonly bid: { readonly previousAmountOre: number; readonly resultingAmountOre: number };

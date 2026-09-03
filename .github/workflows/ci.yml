@@ -47,6 +47,18 @@ jobs:
           PORT: "3000"
           HOSTNAME: "0.0.0.0"
 
+  integration:
+    name: integration (Testcontainers Postgres)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: ".nvmrc", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      # ubuntu-latest ships a Docker daemon; Testcontainers uses it.
+      - run: pnpm test:integration
+
   docker:
     name: build image
     runs-on: ubuntu-latest
@@ -63,14 +75,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Full Playwright (Stripe test mode) + Testcontainers integration matrix
-  # lands in Milestone 2, alongside the payment loop (ADR-0014).
+  # Playwright (Stripe test mode) e2e lands with the /claim + webhook slice.
 
   deploy:
     name: trigger Coolify deploy
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [verify, docker]
+    needs: [verify, integration, docker]
     steps:
       - name: Call Coolify deploy webhook
         env:
