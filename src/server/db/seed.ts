@@ -1,11 +1,16 @@
 import { fromKronor } from "@/lib/money";
+import { env } from "@/server/config/env";
 import { db, schema } from "@/server/db/client";
 import { logger } from "@/server/observability/logger";
 
 /**
- * Idempotent seed: category set (Swedish-labelled, mirrors outbid.lol) + a
- * couple of demo listings so the board renders. Safe to run repeatedly.
- * Run: pnpm db:seed
+ * Idempotent seed. Safe to run repeatedly.
+ *   local: pnpm db:seed
+ *   image: node dist/server/db/seed.js
+ *
+ * Categories are reference data — always seeded. Demo listings are only seeded
+ * outside production, so a fresh prod board is genuinely empty ("Inga
+ * listningar"), not salted with fake rows.
  */
 const CATEGORIES = [
   {
@@ -67,6 +72,11 @@ async function main(): Promise<void> {
     .insert(schema.categories)
     .values(CATEGORIES)
     .onConflictDoNothing({ target: schema.categories.slug });
+
+  if (env.APP_ENV === "production") {
+    logger.info({ categories: CATEGORIES.length }, "seed complete (categories only — production)");
+    process.exit(0);
+  }
 
   const categories = await db.select().from(schema.categories);
   const idBySlug = new Map(categories.map((c) => [c.slug, c.id]));

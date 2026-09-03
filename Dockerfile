@@ -2,8 +2,8 @@
 # One image, two roles (ADR-0002 / ADR-0010 / ADR-0011):
 #   web:    node server.js            (Next.js standalone)  <- default CMD
 #   worker: node dist/workers/main.js  (tsup bundle)         <- Coolify overrides
-# Migrations: Coolify pre-deploy command  `node_modules/.bin/drizzle-kit migrate`
-# (drizzle-kit + drizzle.config.ts + the migrations folder are all in the image).
+# Migrations: Coolify pre-deploy command  `node dist/server/db/migrate.js`
+# (bundled; needs only drizzle-orm + postgres + the .sql files in the image).
 # Lives at the repo root so Coolify's default Dockerfile detection just works.
 
 # ---- deps ----------------------------------------------------------------
@@ -48,9 +48,8 @@ COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/dist ./dist
 COPY --from=build --chown=nextjs:nodejs /app/node_modules ./node_modules
 
-# Migration files + config + package.json (for `pnpm db:migrate` pre-deploy)
+# .sql files for `node dist/server/db/migrate.js` (Coolify pre-deploy)
 COPY --from=build --chown=nextjs:nodejs /app/src/server/db/migrations ./src/server/db/migrations
-COPY --from=build --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=build --chown=nextjs:nodejs /app/package.json ./package.json
 
 USER nextjs
