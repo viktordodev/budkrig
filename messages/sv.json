@@ -3,13 +3,29 @@
     "name": "Budkrig",
     "tagline": "Betala för din placering. Priset går bara uppåt."
   },
+  "header": {
+    "categories": "Kategorier",
+    "rules": "Villkor",
+    "about": "Om oss"
+  },
   "board": {
     "heading": "Topplistan",
     "empty": "Inga listningar än. Var först.",
     "rank": "Plats {rank}",
     "clicks": "{count, plural, =0 {inga klick} one {# klick} other {# klick}}",
     "unavailable": "Topplistan värms upp — försök igen om en stund.",
-    "claimCta": "Ta en plats"
+    "claimCta": "Ta en plats",
+    "allCategories": "Alla",
+    "tabAllTime": "Alla tider",
+    "tabToday": "Idag",
+    "comingSoon": "kommer snart",
+    "heroTitle": "Ta förstaplatsen för",
+    "heroUrlPlaceholder": "Din länk eller @handle",
+    "heroCategoryPlaceholder": "Välj kategori",
+    "heroCta": "Gör anspråk",
+    "claimRankFor": "gör anspråk på platsen för {amount}",
+    "lastActive": "senast aktiv",
+    "uncategorized": "Övrigt"
   },
   "claim": {
     "heading": "Ta en plats på topplistan",
@@ -33,6 +49,7 @@
     "prototype": "Prototyp — se docs/ för arkitektur och beslut.",
     "company": "Företagsinformation",
     "terms": "Användarvillkor",
-    "privacy": "Integritetspolicy"
+    "privacy": "Integritetspolicy",
+    "credit": "Byggd i Sverige 🇸🇪"
   }
 }
