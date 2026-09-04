@@ -1,17 +1,12 @@
-import { systemClock } from "@/modules/bids/ports";
-import { biddingConfig } from "@/server/config/bidding";
-import { db } from "@/server/db/client";
-import { createFulfilmentRepository } from "@/server/db/repositories/fulfilment";
 import { requestLogger } from "@/server/observability/request-id";
 import { normalizeStripeEvent } from "@/server/payments/normalize";
 import { constructWebhookEvent } from "@/server/payments/stripe";
-import { CACHE_KEYS, invalidateCache } from "@/server/redis/cache";
-import { revalidatePath } from "next/cache";
+import { enqueueFulfilPayment } from "@/server/queue/jobs";
 import { NextResponse } from "next/server";
 
 // Needs the raw body + a stable URL, so it's a Route Handler, not a Server
-// Action (ADR-0002). Runs fulfilment synchronously for now; the queue slice
-// moves it to a BullMQ job and also enqueues the receipt + cache invalidation.
+// Action (ADR-0002). Verify → normalise → enqueue → 200, fast (ADR-0010). The
+// worker does the fulfilment transaction + cache invalidation.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -38,18 +33,10 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ received: true, handled: false });
   }
 
-  const repo = createFulfilmentRepository(db, biddingConfig, systemClock);
-  const decision = await repo.fulfil(settled);
+  // A Redis failure here surfaces as 500 → Stripe retries for up to 3 days, and
+  // reconcile-stripe is the final backstop.
+  await enqueueFulfilPayment(settled);
+  log.info({ stripeEventId: event.id, type: event.type }, "stripe webhook enqueued");
 
-  if (decision.kind === "proceed") {
-    await invalidateCache(CACHE_KEYS.board("all"));
-    revalidatePath("/");
-  }
-
-  log.info(
-    { stripeEventId: event.id, type: event.type, decision: decision.kind },
-    "stripe webhook processed",
-  );
-
-  return NextResponse.json({ received: true, decision: decision.kind });
+  return NextResponse.json({ received: true, queued: true });
 }

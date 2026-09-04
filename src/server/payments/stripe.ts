@@ -4,7 +4,7 @@ import { type CheckoutInput, buildCheckoutSessionParams } from "./checkout-param
 
 let client: Stripe | null = null;
 
-function getStripe(): Stripe {
+export function getStripe(): Stripe {
   if (!env.STRIPE_SECRET_KEY) {
     throw new Error("STRIPE_SECRET_KEY is not set");
   }

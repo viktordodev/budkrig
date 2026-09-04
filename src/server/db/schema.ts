@@ -37,6 +37,7 @@ export const paymentStatus = pgEnum("payment_status", [
   "settled",
   "disputed",
   "refunded",
+  "expired",
 ]);
 export const paymentMethod = pgEnum("payment_method", [
   "card",
