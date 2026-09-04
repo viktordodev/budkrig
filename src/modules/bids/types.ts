@@ -2,7 +2,7 @@
 
 export type ListingStatus = "draft" | "pending_payment" | "active" | "hidden" | "removed";
 export type BidStatus = "pending" | "settled" | "expired" | "refunded";
-export type PaymentStatus = "pending" | "settled" | "disputed" | "refunded";
+export type PaymentStatus = "pending" | "settled" | "disputed" | "refunded" | "expired";
 export type PaymentMethod = "card" | "swish" | "klarna" | "wallet" | "other";
 
 export interface ListingState {

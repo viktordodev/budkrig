@@ -14,6 +14,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Real DB comes from Testcontainers; the app env must not be required.
+    env: { SKIP_ENV_VALIDATION: "1" },
     include: ["src/**/*.integration.test.ts"],
     testTimeout: 30_000,
     hookTimeout: 240_000,
