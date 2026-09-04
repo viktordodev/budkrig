@@ -9,16 +9,18 @@ non‑refundable: to move up you pay the difference over the spot above you, and
 the amount you paid becomes the new floor for the next challenger. Nothing
 expires.
 
-> **Status:** architecture prep + Milestone 1 walking skeleton. The app builds,
-> serves `/healthz` + `/readyz`, and renders the board from Postgres (degrading
-> gracefully without it); a BullMQ worker runs a heartbeat job. No payment loop
-> yet. Start at [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md);
-> [`BOOTSTRAP.md`](BOOTSTRAP.md) has run/verify steps and what's left in M1.
+> **Status:** M1 + M2 + most of M3 done, deployed at `budkrig.viktordo.dev`.
+> The board, `/claim`, `/go`, the legal pages, and the async payment loop
+> (claim → Stripe Checkout → webhook → BullMQ fulfilment) are all built and
+> tested; taking a real payment just needs Stripe keys configured.
+> **→ [`docs/status.md`](docs/status.md) is the single page to drive from** —
+> what's built, every env var, what's left by owner.
 
 ## Documentation map
 
 | Where | What |
 | --- | --- |
+| [`docs/status.md`](docs/status.md) | **Build status & handoff** — start here |
 | [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md) | The architecture brief: goals, non‑goals, quality attributes, C4 diagrams, roadmap |
 | [`docs/architecture/domain-model.md`](docs/architecture/domain-model.md) | Entities, the money model, invariants |
 | [`docs/architecture/core-flows.md`](docs/architecture/core-flows.md) | The claim‑rank flow, payment fulfilment, concurrency |
