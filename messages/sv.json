@@ -24,11 +24,15 @@
     "description": "Beskrivning",
     "amount": "Belopp (kr)",
     "email": "E-post",
-    "consent": "Jag samtycker till att tjänsten börjar utföras omedelbart och att jag därmed förlorar min ångerrätt. Betalningen återbetalas inte.",
+    "consent": "Jag samtycker till att tjänsten börjar utföras omedelbart och att jag därmed förlorar min ångerrätt. Betalningen återbetalas inte. Jag har läst <terms>användarvillkoren</terms> och <privacy>integritetspolicyn</privacy>.",
     "submit": "Fortsätt till betalning",
     "submitting": "Öppnar betalning …"
   },
   "footer": {
-    "builtWith": "Prototyp — se docs/ för arkitektur och beslut."
+    "disclaimer": "Listningar är betalda annonsplaceringar. En listning innebär inte att Budkrig rekommenderar eller är anslutet till den länkade webbplatsen.",
+    "prototype": "Prototyp — se docs/ för arkitektur och beslut.",
+    "company": "Företagsinformation",
+    "terms": "Användarvillkor",
+    "privacy": "Integritetspolicy"
   }
 }

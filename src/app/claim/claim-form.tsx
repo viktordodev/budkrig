@@ -96,7 +96,20 @@ export function ClaimForm({
           className="mt-1"
           aria-invalid={Boolean(errs.consent)}
         />
-        <span>{t("consent")}</span>
+        <span>
+          {t.rich("consent", {
+            terms: (chunks) => (
+              <a href="/terms" target="_blank" className="underline" rel="noreferrer">
+                {chunks}
+              </a>
+            ),
+            privacy: (chunks) => (
+              <a href="/privacy" target="_blank" className="underline" rel="noreferrer">
+                {chunks}
+              </a>
+            ),
+          })}
+        </span>
       </label>
 
       <input type="hidden" name="locale" value="sv" />

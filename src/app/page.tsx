@@ -11,7 +11,6 @@ export const revalidate = 5;
 
 export default async function HomePage() {
   const t = await getTranslations("board");
-  const tf = await getTranslations("footer");
 
   let listings: BoardListing[] = [];
   let degraded = false;
@@ -61,8 +60,6 @@ export default async function HomePage() {
           ))}
         </ol>
       )}
-
-      <footer className="mt-12 text-xs text-[var(--muted)]">{tf("builtWith")}</footer>
     </main>
   );
 }

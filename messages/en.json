@@ -24,11 +24,15 @@
     "description": "Description",
     "amount": "Amount (SEK)",
     "email": "Email",
-    "consent": "I agree that the service begins immediately and that I therefore lose my right of withdrawal. The payment is non-refundable.",
+    "consent": "I agree that the service begins immediately and that I therefore lose my right of withdrawal. The payment is non-refundable. I have read the <terms>terms of service</terms> and the <privacy>privacy policy</privacy>.",
     "submit": "Continue to payment",
     "submitting": "Opening payment …"
   },
   "footer": {
-    "builtWith": "Prototype — see docs/ for architecture and decisions."
+    "disclaimer": "Listings are paid ad placements. A listing does not mean Budkrig endorses or is affiliated with the linked site.",
+    "prototype": "Prototype — see docs/ for architecture and decisions.",
+    "company": "Company information",
+    "terms": "Terms of service",
+    "privacy": "Privacy policy"
   }
 }
