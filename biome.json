@@ -2,7 +2,7 @@
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "ignore": [".next", "dist", "coverage", "playwright-report", "src/server/db/migrations"]
+    "ignore": [".next", "dist", "coverage", "playwright-report", "src/server/db/migrations", "load"]
   },
   "formatter": {
     "enabled": true,
@@ -55,7 +55,7 @@
       }
     },
     {
-      "include": ["scripts/**", "*.mjs"],
+      "include": ["scripts/**", "src/load/**", "*.mjs"],
       "linter": { "rules": { "suspicious": { "noConsoleLog": "off" } } }
     },
     {

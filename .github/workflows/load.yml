@@ -1,0 +1,78 @@
+name: Load test
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # nightly 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      peak_vus:
+        description: "Board-spike peak virtual users"
+        default: "2000"
+      bid_count:
+        description: "Concurrent settlements"
+        default: "500"
+
+jobs:
+  load:
+    name: k6 spike + settlement burst
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgres://budkrig_app:app@localhost:5432/budkrig
+      DATABASE_MIGRATION_URL: postgres://budkrig_app:app@localhost:5432/budkrig
+      REDIS_URL: redis://localhost:6379
+      APP_URL: http://localhost:3000
+      APP_ENV: production
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      STRIPE_SECRET_KEY: sk_test_loadtest_dummy
+      STRIPE_WEBHOOK_SECRET: whsec_loadtest
+      LISTING_MANAGEMENT_JWT_SECRET: loadtest-jwt-secret-at-least-32-chars-xx
+      IP_HASH_SALT: loadtest-ip-salt-16chars
+      PENDING_BID_TTL_MINUTES: "120"
+      PEAK_VUS: ${{ github.event.inputs.peak_vus || '2000' }}
+      BID_COUNT: ${{ github.event.inputs.bid_count || '500' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: ".nvmrc", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+
+      - run: docker compose -f docker/compose.yaml up -d postgres redis
+      - name: wait for postgres
+        run: until pg_isready -h localhost -U budkrig_app -d budkrig; do sleep 1; done
+
+      - run: pnpm db:migrate && pnpm db:seed
+      - run: pnpm build
+
+      - name: start web + worker
+        run: |
+          node .next/standalone/server.js > /tmp/web.log 2>&1 &
+          node dist/workers/main.js > /tmp/worker.log 2>&1 &
+          for i in $(seq 1 40); do curl -fsS http://localhost:3000/healthz && break; sleep 1; done
+          curl -fsS http://localhost:3000/readyz
+
+      - name: seed ${{ env.BID_COUNT }} pending bids
+        run: node --import tsx src/load/seed-pending.ts
+
+      - uses: grafana/setup-k6-action@v1
+
+      - name: k6 — settlement burst
+        run: k6 run -e BASE_URL=http://localhost:3000 -e STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET -e BID_COUNT=$BID_COUNT -e VUS=60 load/webhook-burst.js
+
+      - name: wait for the worker to drain the queue
+        run: sleep 30
+
+      - name: k6 — board spike
+        run: k6 run -e BASE_URL=http://localhost:3000 -e PEAK_VUS=$PEAK_VUS load/board-spike.js
+
+      - name: assert every bid settled + ledger consistent
+        run: node --import tsx src/load/check-ledger.ts
+
+      - name: dump logs on failure
+        if: failure()
+        run: |
+          echo "=== web ===" && tail -120 /tmp/web.log
+          echo "=== worker ===" && tail -120 /tmp/worker.log
