@@ -4,6 +4,7 @@ export type ListingStatus = "draft" | "pending_payment" | "active" | "hidden" | 
 export type BidStatus = "pending" | "settled" | "expired" | "refunded";
 export type PaymentStatus = "pending" | "settled" | "disputed" | "refunded" | "expired";
 export type PaymentMethod = "card" | "swish" | "klarna" | "wallet" | "other";
+export type TaxMode = "b2c_se" | "b2b_eu_reverse_charge" | "b2b_domestic" | "non_eu";
 
 export interface ListingState {
   readonly id: string;

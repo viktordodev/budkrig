@@ -103,6 +103,13 @@ async function runFulfilment(
     webhookAlreadyProcessed,
     providerPaymentIntent: event.providerPaymentIntent,
     method: event.method,
+    tax: {
+      grossOre: event.grossOre,
+      vatOre: event.vatOre,
+      vatRate: event.vatRate,
+      taxMode: event.taxMode,
+      countryCode: event.countryCode,
+    },
     bid: bidRow ? toBidState(bidRow) : null,
     payment: paymentRow ? toPaymentState(paymentRow) : null,
     listing: listingRow ? toListingState(listingRow) : null,
@@ -194,6 +201,9 @@ async function applyFulfilment(
       method: plan.method,
       settledAt: now,
       providerPaymentIntent: plan.providerPaymentIntent,
+      vatRate: plan.tax.vatRate,
+      vatAmountOre: plan.tax.vatOre,
+      taxMode: plan.tax.taxMode,
       rawEvent: event.payload ?? {},
     })
     .where(eq(schema.payments.id, plan.paymentId));
