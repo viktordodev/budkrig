@@ -28,6 +28,11 @@ export const fulfilPaymentPayload = z.object({
   method: z.enum(["card", "swish", "klarna", "wallet", "other"]),
   eventKey: z.string(),
   type: z.string(),
+  grossOre: z.number().int(),
+  vatOre: z.number().int().nullable(),
+  vatRate: z.string().nullable(),
+  taxMode: z.enum(["b2c_se", "b2b_eu_reverse_charge", "b2b_domestic", "non_eu"]).nullable(),
+  countryCode: z.string().nullable(),
   payload: z.unknown(),
 });
 export type FulfilPaymentPayload = z.infer<typeof fulfilPaymentPayload>;

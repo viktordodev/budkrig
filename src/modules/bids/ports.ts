@@ -1,7 +1,7 @@
 import type { Ore } from "@/lib/money";
 import type { Result } from "@/lib/result";
 import type { FulfilmentDecision } from "./fulfil";
-import type { PaymentMethod } from "./types";
+import type { PaymentMethod, TaxMode } from "./types";
 
 /** Injected so time is deterministic in tests. */
 export interface Clock {
@@ -22,6 +22,13 @@ export interface SettledPaymentEvent {
   readonly method: PaymentMethod;
   readonly eventKey: string;
   readonly type: string;
+  /** Gross amount settled, in öre — must equal the bid delta. */
+  readonly grossOre: number;
+  /** VAT breakdown (ADR-0007). null when Stripe Tax is off. */
+  readonly vatOre: number | null;
+  readonly vatRate: string | null;
+  readonly taxMode: TaxMode | null;
+  readonly countryCode: string | null;
   /** The raw provider event, stored on the payment row for audit. */
   readonly payload: unknown;
 }

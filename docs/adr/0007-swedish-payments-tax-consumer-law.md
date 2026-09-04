@@ -85,15 +85,18 @@ Budkrig is Sweden‑first (G4). That is more than translation:
   a dedicated sequence, allocated only at settlement.
 
 ### Follow‑ups
+- ✅ **Code (M3a):** `CHECKOUT_PAYMENT_METHODS` (Swish‑first order, `card` default
+  until Swish/Klarna are activated on the account), `STRIPE_TAX_ENABLED`
+  (`automatic_tax` + `tax_id_collection` + VAT‑inclusive pricing), VAT breakdown
+  captured on the payment row (`vat_rate` / `vat_amount_ore` / `tax_mode`),
+  `checkout.session.async_payment_succeeded` handled for Swish/Klarna.
 - Legal review of: withdrawal‑waiver wording, terms, refund policy, the
   domain‑listing / third‑party‑brand policy (ADR‑0015, Open questions Q4/Q5).
 - Accountant: confirm company vehicle, VAT registration, OSS applicability
   (Q1).
 - Implement invoice PDF templating in the worker; 7‑year archival + retention
-  job.
-- `företagsinformation` / imprint page with org.nr, VAT nr, contact (replaces
-  outbid.lol's German "Impressum").
-- Config: payment‑method order, `DEFAULT_COUNTRY=SE`, tax settings.
+  job. (Needs email + object storage — its own slice.)
+- `företagsinformation` / imprint page with org.nr, VAT nr, contact (M3b).
 
 ## Alternatives considered
 

@@ -27,6 +27,11 @@ export async function processFulfilPayment(
     method: payload.method,
     eventKey: payload.eventKey,
     type: payload.type,
+    grossOre: payload.grossOre,
+    vatOre: payload.vatOre,
+    vatRate: payload.vatRate,
+    taxMode: payload.taxMode,
+    countryCode: payload.countryCode,
     payload: payload.payload,
   };
 

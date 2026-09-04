@@ -4,7 +4,7 @@ import { expirePendingBids } from "@/server/db/repositories/bids";
 import { createFulfilmentRepository } from "@/server/db/repositories/fulfilment";
 import { assertLedger, findUnsettledPaymentIntents } from "@/server/db/repositories/reconcile";
 import * as schema from "@/server/db/schema";
-import { makeListing, makePendingBid, stripeEvent } from "@/test/factories";
+import { makeListing, makePendingBid, settlementEvent, stripeEvent } from "@/test/factories";
 import { type TestDb, startTestDb } from "@/test/pg";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -38,7 +38,7 @@ describe("expirePendingBids", () => {
 
     const settled = await makePendingBid(tdb.db, listing.id, { deltaOre: 700 });
     await createFulfilmentRepository(tdb.db, config, at()).fulfil(
-      stripeEvent(settled.eventKey, { providerPaymentIntent: "pi_s" }),
+      settlementEvent(settled, { providerPaymentIntent: "pi_s" }),
     );
 
     const count = await expirePendingBids(tdb.db, new Date("2026-09-04T00:00:00Z"));
@@ -70,7 +70,7 @@ describe("assertLedger", () => {
     const listing = await makeListing(tdb.db, { status: "pending_payment", currentAmountOre: 0 });
     const b = await makePendingBid(tdb.db, listing.id, { deltaOre: 500 });
     await createFulfilmentRepository(tdb.db, config, at()).fulfil(
-      stripeEvent(b.eventKey, { providerPaymentIntent: "pi_1" }),
+      settlementEvent(b, { providerPaymentIntent: "pi_1" }),
     );
 
     expect(await assertLedger(tdb.db)).toEqual([]);
@@ -80,7 +80,7 @@ describe("assertLedger", () => {
     const listing = await makeListing(tdb.db, { status: "pending_payment", currentAmountOre: 0 });
     const b = await makePendingBid(tdb.db, listing.id, { deltaOre: 500 });
     await createFulfilmentRepository(tdb.db, config, at()).fulfil(
-      stripeEvent(b.eventKey, { providerPaymentIntent: "pi_1" }),
+      settlementEvent(b, { providerPaymentIntent: "pi_1" }),
     );
 
     // corrupt the cache
@@ -100,7 +100,7 @@ describe("findUnsettledPaymentIntents", () => {
     const listing = await makeListing(tdb.db, { status: "pending_payment" });
     const b = await makePendingBid(tdb.db, listing.id, { deltaOre: 500 });
     await createFulfilmentRepository(tdb.db, config, at()).fulfil(
-      stripeEvent(b.eventKey, { providerPaymentIntent: "pi_settled" }),
+      settlementEvent(b, { providerPaymentIntent: "pi_settled" }),
     );
 
     expect(
@@ -118,6 +118,11 @@ describe("processFulfilPayment", () => {
     method: "card" as const,
     eventKey,
     type: "checkout.session.completed",
+    grossOre: 500,
+    vatOre: null,
+    vatRate: null,
+    taxMode: null,
+    countryCode: null,
     payload: { id: "evt" },
     ...over,
   });

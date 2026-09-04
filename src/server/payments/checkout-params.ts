@@ -5,22 +5,23 @@ export interface CheckoutInput {
   readonly bidId: string;
   readonly eventKey: string;
   readonly listingSlug: string;
-  /** What to charge for this bid, in öre. */
+  /** What to charge for this bid, in öre — VAT-inclusive (ADR-0007). */
   readonly amountOre: number;
   readonly isNewListing: boolean;
   readonly customerEmail: string;
   readonly locale: "sv" | "en";
   readonly successUrl: string;
   readonly cancelUrl: string;
+  /** Only enable when Stripe Tax is activated on the account. */
+  readonly taxEnabled: boolean;
+  /** In display order — Swish before credit (ADR-0007). */
+  readonly paymentMethods: string[];
 }
 
 /**
- * Pure — builds the Checkout Session params (ADR-0006). Hosted Checkout, one
- * line item for the bid delta, our `eventKey` threaded through the session AND
- * the payment_intent metadata so fulfilment can find the bid from either event.
- *
- * TODO(M3 / ADR-0007): payment_method_types `["swish", "card", "klarna"]`
- * (Swish first per the 2020 SE law) + `automatic_tax` once Stripe Tax is set up.
+ * Pure — builds the Checkout Session params (ADR-0006 / ADR-0007). Hosted
+ * Checkout, Swish → card → Klarna, one VAT-inclusive line item for the bid
+ * delta, our `eventKey` in the session AND the payment_intent metadata.
  */
 export function buildCheckoutSessionParams(
   input: CheckoutInput,
@@ -29,9 +30,10 @@ export function buildCheckoutSessionParams(
     ? `Budkrig – placering för ${input.listingSlug}`
     : `Budkrig – höjning för ${input.listingSlug}`;
 
-  return {
+  const params: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
-    payment_method_types: ["card"],
+    payment_method_types:
+      input.paymentMethods as Stripe.Checkout.SessionCreateParams.PaymentMethodType[],
     customer_email: input.customerEmail,
     locale: input.locale,
     line_items: [
@@ -41,6 +43,7 @@ export function buildCheckoutSessionParams(
           currency: CURRENCY,
           unit_amount: input.amountOre,
           product_data: { name: label },
+          ...(input.taxEnabled ? { tax_behavior: "inclusive" } : {}),
         },
       },
     ],
@@ -55,4 +58,12 @@ export function buildCheckoutSessionParams(
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
   };
+
+  if (input.taxEnabled) {
+    params.automatic_tax = { enabled: true };
+    params.tax_id_collection = { enabled: true };
+    params.billing_address_collection = "required";
+  }
+
+  return params;
 }

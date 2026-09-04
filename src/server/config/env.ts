@@ -23,7 +23,24 @@ const schema = z.object({
   // Required from Milestone 2 (payments). Optional now so the skeleton boots.
   STRIPE_SECRET_KEY: z.string().startsWith("sk_").optional(),
   STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_").optional(),
-  STRIPE_TAX_ENABLED: z.coerce.boolean().default(true),
+  // Off by default — turning it on before Stripe Tax is activated on the
+  // account breaks checkout. Flip once Tax is set up (ADR-0007 / ADR-0015).
+  STRIPE_TAX_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  // Checkout methods, in display order. Swish before credit (2020 SE law,
+  // ADR-0007). `card` alone by default — add "swish", "klarna" once each is
+  // activated on the Stripe account, else checkout errors.
+  CHECKOUT_PAYMENT_METHODS: z
+    .string()
+    .default("card")
+    .transform((s) =>
+      s
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean),
+    ),
 
   CURRENCY: z.literal("SEK").default("SEK"),
   NEW_LISTING_MIN_ORE: z.coerce.number().int().positive().default(500),

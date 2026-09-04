@@ -16,12 +16,18 @@ export function getStripe(): Stripe {
 
 /**
  * Create a hosted Checkout Session for a pending bid (ADR-0006). The bid id is
- * the idempotency key, so a retried claim can't double-charge.
+ * the idempotency key, so a retried claim can't double-charge. `taxEnabled` is
+ * injected from env so the caller doesn't need to know about Stripe Tax.
  */
 export async function createCheckoutSession(
-  input: CheckoutInput,
+  input: Omit<CheckoutInput, "taxEnabled" | "paymentMethods">,
 ): Promise<Stripe.Checkout.Session> {
-  return getStripe().checkout.sessions.create(buildCheckoutSessionParams(input), {
+  const params = buildCheckoutSessionParams({
+    ...input,
+    taxEnabled: env.STRIPE_TAX_ENABLED,
+    paymentMethods: env.CHECKOUT_PAYMENT_METHODS ?? ["card"],
+  });
+  return getStripe().checkout.sessions.create(params, {
     idempotencyKey: `checkout_${input.bidId}`,
   });
 }

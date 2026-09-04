@@ -1,4 +1,13 @@
-import type { BidState, ListingState, PaymentMethod, PaymentState } from "./types";
+import type { BidState, ListingState, PaymentMethod, PaymentState, TaxMode } from "./types";
+
+/** VAT breakdown from the PSP, or nulls when Stripe Tax is off (ADR-0007). */
+export interface TaxDetails {
+  readonly grossOre: number;
+  readonly vatOre: number | null;
+  readonly vatRate: string | null;
+  readonly taxMode: TaxMode | null;
+  readonly countryCode: string | null;
+}
 
 /**
  * Flow 1b (fulfilment, core-flows). Pure decision: given a settled-payment
@@ -16,6 +25,7 @@ export interface FulfilmentContext {
   readonly webhookAlreadyProcessed: boolean;
   readonly providerPaymentIntent: string;
   readonly method: PaymentMethod;
+  readonly tax: TaxDetails;
   /** The bid found by our eventKey / Stripe metadata. */
   readonly bid: BidState | null;
   readonly payment: PaymentState | null;
@@ -50,6 +60,7 @@ export interface FulfilmentPlan {
   readonly deltaOre: number;
   readonly providerPaymentIntent: string;
   readonly method: PaymentMethod;
+  readonly tax: TaxDetails;
 }
 
 export function decideFulfilment(ctx: FulfilmentContext): FulfilmentDecision {
@@ -91,11 +102,13 @@ export function decideFulfilment(ctx: FulfilmentContext): FulfilmentDecision {
       detail: `listing ${ctx.bid.listingId} not found`,
     };
   }
-  if (ctx.payment.amountOre !== ctx.bid.deltaOre) {
+  // The pending payment row and the amount Stripe actually settled must both
+  // equal the bid delta (VAT-inclusive, ADR-0007).
+  if (ctx.payment.amountOre !== ctx.bid.deltaOre || ctx.tax.grossOre !== ctx.bid.deltaOre) {
     return {
       kind: "anomaly",
       reason: "amount_mismatch",
-      detail: `payment ${ctx.payment.amountOre} != bid delta ${ctx.bid.deltaOre}`,
+      detail: `bid delta ${ctx.bid.deltaOre}, payment ${ctx.payment.amountOre}, settled ${ctx.tax.grossOre}`,
     };
   }
 
@@ -108,6 +121,7 @@ export function decideFulfilment(ctx: FulfilmentContext): FulfilmentDecision {
       deltaOre: ctx.bid.deltaOre,
       providerPaymentIntent: ctx.providerPaymentIntent,
       method: ctx.method,
+      tax: ctx.tax,
     },
   };
 }

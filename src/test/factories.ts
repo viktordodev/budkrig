@@ -86,7 +86,7 @@ export async function makePendingBid(
       .returning(),
     "payment",
   );
-  return { bid, payment, eventKey };
+  return { bid, payment, eventKey, deltaOre };
 }
 
 export function claimInput(over: Partial<ClaimInput> = {}): ClaimInput {
@@ -117,6 +117,19 @@ export function stripeEvent(
     method: over.method ?? "card",
     eventKey,
     type: over.type ?? "checkout.session.completed",
+    grossOre: over.grossOre ?? 0,
+    vatOre: over.vatOre ?? null,
+    vatRate: over.vatRate ?? null,
+    taxMode: over.taxMode ?? null,
+    countryCode: over.countryCode ?? null,
     payload: over.payload ?? { id: "evt_test", object: "event" },
   };
+}
+
+/** A settled event whose gross matches the pending bid's delta — the happy case. */
+export function settlementEvent(
+  pending: { eventKey: string; deltaOre: number },
+  over: Partial<SettledPaymentEvent> = {},
+): SettledPaymentEvent {
+  return stripeEvent(pending.eventKey, { grossOre: pending.deltaOre, ...over });
 }

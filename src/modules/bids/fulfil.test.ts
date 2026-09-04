@@ -29,10 +29,20 @@ const listing = (over: Partial<ListingState> = {}): ListingState => ({
   ...over,
 });
 
+const tax = (over: Partial<FulfilmentContext["tax"]> = {}): FulfilmentContext["tax"] => ({
+  grossOre: 500,
+  vatOre: null,
+  vatRate: null,
+  taxMode: null,
+  countryCode: null,
+  ...over,
+});
+
 const ctx = (over: Partial<FulfilmentContext> = {}): FulfilmentContext => ({
   webhookAlreadyProcessed: false,
   providerPaymentIntent: "pi_123",
   method: "card",
+  tax: tax(),
   bid: bid(),
   payment: payment(),
   listing: listing(),
@@ -102,7 +112,15 @@ describe("decideFulfilment — proceed", () => {
         deltaOre: 500,
         providerPaymentIntent: "pi_123",
         method: "card",
+        tax: { grossOre: 500, vatOre: null, vatRate: null, taxMode: null, countryCode: null },
       },
+    });
+  });
+
+  it("flags a settled amount that differs from the bid delta", () => {
+    expect(decideFulfilment(ctx({ tax: tax({ grossOre: 501 }) }))).toMatchObject({
+      kind: "anomaly",
+      reason: "amount_mismatch",
     });
   });
 

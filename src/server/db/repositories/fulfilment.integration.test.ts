@@ -6,7 +6,7 @@ import {
 } from "@/modules/bids/ledger";
 import type { Clock } from "@/modules/bids/ports";
 import * as schema from "@/server/db/schema";
-import { makeListing, makePendingBid, stripeEvent } from "@/test/factories";
+import { makeListing, makePendingBid, settlementEvent, stripeEvent } from "@/test/factories";
 import { type TestDb, startTestDb } from "@/test/pg";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -41,10 +41,10 @@ beforeEach(async () => {
 describe("fulfilment repository", () => {
   it("activates a brand-new listing on first settlement", async () => {
     const listing = await makeListing(tdb.db, { status: "pending_payment", currentAmountOre: 0 });
-    const { eventKey } = await makePendingBid(tdb.db, listing.id, { deltaOre: 500 });
+    const pb = await makePendingBid(tdb.db, listing.id, { deltaOre: 500 });
     const repo = createFulfilmentRepository(tdb.db, config, at());
 
-    const decision = await repo.fulfil(stripeEvent(eventKey, { providerPaymentIntent: "pi_1" }));
+    const decision = await repo.fulfil(settlementEvent(pb, { providerPaymentIntent: "pi_1" }));
     expect(decision.kind).toBe("proceed");
 
     const [l] = await tdb.db
@@ -55,7 +55,10 @@ describe("fulfilment repository", () => {
     expect(l?.currentAmountOre).toBe(500);
     expect(l?.firstActiveAt).not.toBeNull();
 
-    const [b] = await tdb.db.select().from(schema.bids).where(eq(schema.bids.eventKey, eventKey));
+    const [b] = await tdb.db
+      .select()
+      .from(schema.bids)
+      .where(eq(schema.bids.eventKey, pb.eventKey));
     expect(b?.status).toBe("settled");
     expect(b?.previousAmountOre).toBe(0);
     expect(b?.resultingAmountOre).toBe(500);
@@ -71,9 +74,9 @@ describe("fulfilment repository", () => {
 
   it("is idempotent on the webhook event id — replay is a no-op", async () => {
     const listing = await makeListing(tdb.db, { status: "pending_payment" });
-    const { eventKey } = await makePendingBid(tdb.db, listing.id, { deltaOre: 700 });
+    const pb = await makePendingBid(tdb.db, listing.id, { deltaOre: 700 });
     const repo = createFulfilmentRepository(tdb.db, config, at());
-    const event = stripeEvent(eventKey, {
+    const event = settlementEvent(pb, {
       providerEventId: "evt_same",
       providerPaymentIntent: "pi_x",
     });
@@ -98,14 +101,14 @@ describe("fulfilment repository", () => {
 
   it("is idempotent on a re-delivered payment — new event id, same bid + payment_intent", async () => {
     const listing = await makeListing(tdb.db, { status: "pending_payment" });
-    const { eventKey } = await makePendingBid(tdb.db, listing.id, { deltaOre: 700 });
+    const pb = await makePendingBid(tdb.db, listing.id, { deltaOre: 700 });
     const repo = createFulfilmentRepository(tdb.db, config, at());
 
     await repo.fulfil(
-      stripeEvent(eventKey, { providerEventId: "evt_1", providerPaymentIntent: "pi_same" }),
+      settlementEvent(pb, { providerEventId: "evt_1", providerPaymentIntent: "pi_same" }),
     );
     const second = await repo.fulfil(
-      stripeEvent(eventKey, { providerEventId: "evt_2", providerPaymentIntent: "pi_same" }),
+      settlementEvent(pb, { providerEventId: "evt_2", providerPaymentIntent: "pi_same" }),
     );
 
     expect(second).toEqual({ kind: "skip", reason: "already_settled" });
@@ -123,8 +126,8 @@ describe("fulfilment repository", () => {
     const repo = createFulfilmentRepository(tdb.db, config, at());
 
     const [da, dbn] = await Promise.all([
-      repo.fulfil(stripeEvent(a.eventKey, { providerPaymentIntent: "pi_a" })),
-      repo.fulfil(stripeEvent(b.eventKey, { providerPaymentIntent: "pi_b" })),
+      repo.fulfil(settlementEvent(a, { providerPaymentIntent: "pi_a" })),
+      repo.fulfil(settlementEvent(b, { providerPaymentIntent: "pi_b" })),
     ]);
     expect(da.kind).toBe("proceed");
     expect(dbn.kind).toBe("proceed");
@@ -153,9 +156,7 @@ describe("fulfilment repository", () => {
     const repo = createFulfilmentRepository(tdb.db, config, at());
 
     await Promise.all(
-      bids.map((x, i) =>
-        repo.fulfil(stripeEvent(x.eventKey, { providerPaymentIntent: `pi_${i}` })),
-      ),
+      bids.map((x, i) => repo.fulfil(settlementEvent(x, { providerPaymentIntent: `pi_${i}` }))),
     );
 
     const [l] = await tdb.db
@@ -179,8 +180,8 @@ describe("fulfilment repository", () => {
     const repo = createFulfilmentRepository(tdb.db, config, at());
 
     await Promise.all([
-      repo.fulfil(stripeEvent(b1.eventKey, { providerPaymentIntent: "pi_1" })),
-      repo.fulfil(stripeEvent(b2.eventKey, { providerPaymentIntent: "pi_2" })),
+      repo.fulfil(settlementEvent(b1, { providerPaymentIntent: "pi_1" })),
+      repo.fulfil(settlementEvent(b2, { providerPaymentIntent: "pi_2" })),
     ]);
 
     const [r1] = await tdb.db.select().from(schema.listings).where(eq(schema.listings.id, l1.id));
@@ -195,12 +196,15 @@ describe("fulfilment repository", () => {
       currentAmountOre: 2_000,
       firstActiveAt: new Date("2026-08-01T00:00:00Z"),
     });
-    const { eventKey } = await makePendingBid(tdb.db, listing.id, { deltaOre: 200 });
+    const pb = await makePendingBid(tdb.db, listing.id, { deltaOre: 200 });
     const repo = createFulfilmentRepository(tdb.db, config, at());
 
-    await repo.fulfil(stripeEvent(eventKey, { providerPaymentIntent: "pi_1" }));
+    await repo.fulfil(settlementEvent(pb, { providerPaymentIntent: "pi_1" }));
 
-    const [b] = await tdb.db.select().from(schema.bids).where(eq(schema.bids.eventKey, eventKey));
+    const [b] = await tdb.db
+      .select()
+      .from(schema.bids)
+      .where(eq(schema.bids.eventKey, pb.eventKey));
     expect(b?.previousAmountOre).toBe(2_000);
     expect(b?.resultingAmountOre).toBe(2_200);
     const [l] = await tdb.db
@@ -217,10 +221,10 @@ describe("fulfilment repository", () => {
       currentAmountOre: 5_000,
       firstActiveAt: new Date("2026-08-01T00:00:00Z"),
     });
-    const { eventKey } = await makePendingBid(tdb.db, listing.id, { deltaOre: 500 });
+    const pb = await makePendingBid(tdb.db, listing.id, { deltaOre: 500 });
     const repo = createFulfilmentRepository(tdb.db, config, at());
 
-    await repo.fulfil(stripeEvent(eventKey, { providerPaymentIntent: "pi_1" }));
+    await repo.fulfil(settlementEvent(pb, { providerPaymentIntent: "pi_1" }));
 
     const [l] = await tdb.db
       .select()
@@ -228,7 +232,10 @@ describe("fulfilment repository", () => {
       .where(eq(schema.listings.id, listing.id));
     expect(l?.status).toBe("hidden");
     expect(l?.currentAmountOre).toBe(5_500);
-    const [b] = await tdb.db.select().from(schema.bids).where(eq(schema.bids.eventKey, eventKey));
+    const [b] = await tdb.db
+      .select()
+      .from(schema.bids)
+      .where(eq(schema.bids.eventKey, pb.eventKey));
     expect(b?.status).toBe("settled");
   });
 
@@ -239,9 +246,9 @@ describe("fulfilment repository", () => {
     const b2 = await makePendingBid(tdb.db, l2.id, { deltaOre: 500 });
     const repo = createFulfilmentRepository(tdb.db, config, at());
 
-    await repo.fulfil(stripeEvent(b1.eventKey, { providerPaymentIntent: "pi_shared" }));
+    await repo.fulfil(settlementEvent(b1, { providerPaymentIntent: "pi_shared" }));
     const second = await repo.fulfil(
-      stripeEvent(b2.eventKey, {
+      settlementEvent(b2, {
         providerEventId: "evt_dup_pi",
         providerPaymentIntent: "pi_shared",
       }),
