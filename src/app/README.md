@@ -4,15 +4,18 @@
 `NEXT_LOCALE` cookie (see `src/server/config/i18n.ts`). If SEO later needs `/en`
 paths, add next-intl routing + middleware + a `[locale]` segment then.
 
-## Current (Milestone 1)
+## Current
 
 ```
 app/
-  layout.tsx           root — <html lang>, NextIntlClientProvider, metadata
-  page.tsx             home = the board (reads DB, degrades gracefully)
-  globals.css          Tailwind v4 entry + theme tokens
-  healthz/route.ts     liveness (no dependencies)
-  readyz/route.ts      readiness (DB + Redis) — Coolify gates deploys on this
+  layout.tsx                    root — <html lang>, NextIntlClientProvider, metadata
+  page.tsx                      home = the board (ISR revalidate 5s + Redis query cache)
+  globals.css                   Tailwind v4 entry + theme tokens
+  healthz/ readyz/              liveness / readiness (Coolify)
+  claim/
+    page.tsx  claim-form.tsx  actions.ts   claim/raise → Stripe Checkout (Flow 1a)
+  go/[slug]/route.ts            outbound click → 302 (records a click, no open redirect)
+  api/webhooks/stripe/route.ts  verify → normalize → fulfil (sync) + revalidate
 ```
 
 ## Planned
