@@ -3,8 +3,11 @@ import {
   checkLedgerConsistency,
   currentAmountFromLedger,
 } from "@/modules/bids/ledger";
-import { db, schema } from "@/server/db/client";
 import { and, eq, inArray } from "drizzle-orm";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import * as schema from "../schema";
+
+type Db = PostgresJsDatabase<typeof schema>;
 
 export interface LedgerMismatch {
   readonly listingId: string;
@@ -20,7 +23,7 @@ export interface LedgerMismatch {
  * invariant 2). One query per listing — fine off the hot path; batch if the
  * listing count ever makes it slow.
  */
-export async function assertLedger(): Promise<LedgerMismatch[]> {
+export async function assertLedger(db: Db): Promise<LedgerMismatch[]> {
   const listings = await db
     .select({
       id: schema.listings.id,
@@ -73,7 +76,10 @@ export async function assertLedger(): Promise<LedgerMismatch[]> {
  * taken but not fulfilled (a missed webhook). The Stripe listing itself lives
  * in server/payments/reconcile.ts.
  */
-export async function findUnsettledPaymentIntents(paymentIntentIds: string[]): Promise<string[]> {
+export async function findUnsettledPaymentIntents(
+  db: Db,
+  paymentIntentIds: string[],
+): Promise<string[]> {
   if (paymentIntentIds.length === 0) return [];
   const settled = await db
     .select({ pi: schema.bids.providerPaymentIntent })

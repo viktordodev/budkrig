@@ -41,7 +41,7 @@ describe("expirePendingBids", () => {
       stripeEvent(settled.eventKey, { providerPaymentIntent: "pi_s" }),
     );
 
-    const count = await expirePendingBids(new Date("2026-09-04T00:00:00Z"));
+    const count = await expirePendingBids(tdb.db, new Date("2026-09-04T00:00:00Z"));
     expect(count).toBe(1);
 
     const [oldBid] = await tdb.db.select().from(schema.bids).where(eq(schema.bids.id, old.bid.id));
@@ -73,7 +73,7 @@ describe("assertLedger", () => {
       stripeEvent(b.eventKey, { providerPaymentIntent: "pi_1" }),
     );
 
-    expect(await assertLedger()).toEqual([]);
+    expect(await assertLedger(tdb.db)).toEqual([]);
   });
 
   it("flags a listing whose cached amount drifted from the ledger", async () => {
@@ -89,7 +89,7 @@ describe("assertLedger", () => {
       .set({ currentAmountOre: 999 })
       .where(eq(schema.listings.id, listing.id));
 
-    const mismatches = await assertLedger();
+    const mismatches = await assertLedger(tdb.db);
     expect(mismatches).toHaveLength(1);
     expect(mismatches[0]).toMatchObject({ cachedAmountOre: 999, ledgerAmountOre: 500 });
   });
@@ -103,11 +103,10 @@ describe("findUnsettledPaymentIntents", () => {
       stripeEvent(b.eventKey, { providerPaymentIntent: "pi_settled" }),
     );
 
-    expect(await findUnsettledPaymentIntents(["pi_settled", "pi_missing", "pi_other"])).toEqual([
-      "pi_missing",
-      "pi_other",
-    ]);
-    expect(await findUnsettledPaymentIntents([])).toEqual([]);
+    expect(
+      await findUnsettledPaymentIntents(tdb.db, ["pi_settled", "pi_missing", "pi_other"]),
+    ).toEqual(["pi_missing", "pi_other"]);
+    expect(await findUnsettledPaymentIntents(tdb.db, [])).toEqual([]);
   });
 });
 
@@ -127,7 +126,7 @@ describe("processFulfilPayment", () => {
     const listing = await makeListing(tdb.db, { status: "pending_payment", currentAmountOre: 0 });
     const b = await makePendingBid(tdb.db, listing.id, { deltaOre: 500 });
 
-    await processFulfilPayment(payload(b.eventKey));
+    await processFulfilPayment(payload(b.eventKey), tdb.db);
 
     const [bid] = await tdb.db
       .select()
@@ -137,7 +136,7 @@ describe("processFulfilPayment", () => {
   });
 
   it("throws on bid_missing so BullMQ retries", async () => {
-    await expect(processFulfilPayment(payload("no-such-bid"))).rejects.toThrow(/no bid/);
+    await expect(processFulfilPayment(payload("no-such-bid"), tdb.db)).rejects.toThrow(/no bid/);
   });
 
   it("does not throw on an anomaly (data problem, not transient)", async () => {
@@ -146,12 +145,14 @@ describe("processFulfilPayment", () => {
     // settle it once
     await processFulfilPayment(
       payload(b.eventKey, { providerEventId: "evt_1", providerPaymentIntent: "pi_x" }),
+      tdb.db,
     );
     // a different bid re-using pi_x -> pi_conflict anomaly, must not throw
     const other = await makePendingBid(tdb.db, listing.id, { deltaOre: 500 });
     await expect(
       processFulfilPayment(
         payload(other.eventKey, { providerEventId: "evt_2", providerPaymentIntent: "pi_x" }),
+        tdb.db,
       ),
     ).resolves.toBeUndefined();
     const [b2] = await tdb.db
