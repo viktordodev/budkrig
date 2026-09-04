@@ -1,3 +1,4 @@
+import { SiteFooter } from "@/components/site-footer";
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
@@ -23,6 +24,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
           {children}
+          <SiteFooter />
         </NextIntlClientProvider>
       </body>
     </html>

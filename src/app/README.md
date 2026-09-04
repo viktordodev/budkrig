@@ -15,8 +15,12 @@ app/
   claim/
     page.tsx  claim-form.tsx  actions.ts   claim/raise → Stripe Checkout (Flow 1a)
   go/[slug]/route.ts            outbound click → 302 (records a click, no open redirect)
-  api/webhooks/stripe/route.ts  verify → normalize → fulfil (sync) + revalidate
+  api/webhooks/stripe/route.ts  verify → normalize → enqueue (BullMQ) → 200
+  (legal)/terms|privacy|foretagsinformation/   draft legal pages (src/content/legal.ts)
 ```
+
+Root `layout.tsx` renders `<SiteFooter>` (legal links + "paid placement, not
+endorsed" disclaimer) on every page.
 
 ## Planned
 
