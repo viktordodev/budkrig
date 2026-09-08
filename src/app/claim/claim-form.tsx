@@ -8,7 +8,15 @@ const initial: ClaimState = { status: "idle" };
 
 export function ClaimForm({
   categories,
-}: { categories: ReadonlyArray<{ slug: string; nameSv: string }> }) {
+  defaultCategory,
+  defaultAmountKr,
+  defaultTarget,
+}: {
+  categories: ReadonlyArray<{ slug: string; nameSv: string }>;
+  defaultCategory?: string | undefined;
+  defaultAmountKr?: string | undefined;
+  defaultTarget?: string | undefined;
+}) {
   const t = useTranslations("claim");
   const [state, action, pending] = useActionState(submitClaim, initial);
   const errs = state.status === "error" ? (state.fieldErrors ?? {}) : {};
@@ -20,6 +28,7 @@ export function ClaimForm({
         <input
           name="target"
           required
+          defaultValue={defaultTarget}
           placeholder={t("target.placeholder")}
           aria-invalid={Boolean(errs.target)}
           className="rounded border border-[var(--border)] bg-transparent px-3 py-2"
@@ -32,6 +41,7 @@ export function ClaimForm({
         <select
           name="category"
           required
+          defaultValue={defaultCategory ?? ""}
           className="rounded border border-[var(--border)] bg-transparent px-3 py-2"
         >
           <option value="">—</option>
@@ -73,6 +83,7 @@ export function ClaimForm({
             min={1}
             step={1}
             required
+            defaultValue={defaultAmountKr}
             aria-invalid={Boolean(errs.amountKr)}
             className="rounded border border-[var(--border)] bg-transparent px-3 py-2 tabular-nums"
           />
@@ -123,7 +134,7 @@ export function ClaimForm({
       <button
         type="submit"
         disabled={pending}
-        className="rounded bg-[var(--fg)] px-4 py-2 font-medium text-[var(--bg)] disabled:opacity-60"
+        className="rounded bg-[var(--accent)] px-4 py-2 font-medium text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-hover)] disabled:opacity-60"
       >
         {pending ? t("submitting") : t("submit")}
       </button>

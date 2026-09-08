@@ -19,7 +19,10 @@ export type BoardListing = {
   categoryNameSv: string | null;
 };
 
-function queryActiveBoard(limit: number): Promise<BoardListing[]> {
+function queryActiveBoard(limit: number, categorySlug?: string): Promise<BoardListing[]> {
+  const conditions = [eq(schema.listings.status, "active")];
+  if (categorySlug) conditions.push(eq(schema.categories.slug, categorySlug));
+
   return db
     .select({
       slug: schema.listings.slug,
@@ -33,7 +36,7 @@ function queryActiveBoard(limit: number): Promise<BoardListing[]> {
     })
     .from(schema.listings)
     .leftJoin(schema.categories, eq(schema.listings.categoryId, schema.categories.id))
-    .where(eq(schema.listings.status, "active"))
+    .where(and(...conditions))
     .orderBy(
       desc(schema.listings.currentAmountOre),
       asc(schema.listings.firstActiveAt),
@@ -43,8 +46,10 @@ function queryActiveBoard(limit: number): Promise<BoardListing[]> {
 }
 
 /** Cached read (ADR-0009). Invalidated on fulfilment via `invalidateBoardCache`. */
-export async function getActiveBoard(limit = 50): Promise<BoardListing[]> {
-  return cached(CACHE_KEYS.board("all"), 5, () => queryActiveBoard(limit));
+export async function getActiveBoard(limit = 50, categorySlug?: string): Promise<BoardListing[]> {
+  return cached(CACHE_KEYS.board("all", categorySlug), 5, () =>
+    queryActiveBoard(limit, categorySlug),
+  );
 }
 
 /** Where `/go/{slug}` sends the visitor. Null unless the slug is an active listing. */

@@ -3,13 +3,29 @@
     "name": "Budkrig",
     "tagline": "Pay for your rank. The price only goes up."
   },
+  "header": {
+    "categories": "Categories",
+    "rules": "Terms",
+    "about": "About"
+  },
   "board": {
     "heading": "The leaderboard",
     "empty": "No listings yet. Be first.",
     "rank": "Rank {rank}",
     "clicks": "{count, plural, =0 {no clicks} one {# click} other {# clicks}}",
     "unavailable": "The leaderboard is warming up — try again in a moment.",
-    "claimCta": "Claim a spot"
+    "claimCta": "Claim a spot",
+    "allCategories": "All",
+    "tabAllTime": "All-time",
+    "tabToday": "Today",
+    "comingSoon": "coming soon",
+    "heroTitle": "Claim #1 for",
+    "heroUrlPlaceholder": "Your link or @handle",
+    "heroCategoryPlaceholder": "Choose a category",
+    "heroCta": "Claim rank",
+    "claimRankFor": "claim this rank for {amount}",
+    "lastActive": "last active",
+    "uncategorized": "Other"
   },
   "claim": {
     "heading": "Claim a spot on the leaderboard",
@@ -33,6 +49,7 @@
     "prototype": "Prototype — see docs/ for architecture and decisions.",
     "company": "Company information",
     "terms": "Terms of service",
-    "privacy": "Privacy policy"
+    "privacy": "Privacy policy",
+    "credit": "Built in Sweden 🇸🇪"
   }
 }
