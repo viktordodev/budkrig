@@ -1,6 +1,6 @@
 # Budkrig — build status & handoff
 
-_Last updated: 2026‑09‑04 · after PR #12 · `main` @ `3b172a2`_
+_Last updated: 2026‑09‑08 · after PR #14 · `main` @ `7fbed86`_
 
 The single page to drive from. What's built, what's deployed, every env var,
 and exactly what's left — by owner.
@@ -20,16 +20,18 @@ adversarial content from day one — see
 
 **https://budkrig.viktordo.dev** (Coolify, single EU VPS).
 
-Working: the board renders from Postgres, `/claim` form (all fields + EU consent
-+ links to `/terms`/`/privacy`), `/go/{slug}` redirect, `/foretagsinformation`
-`/terms` `/privacy`, `/healthz` + `/readyz` (both green — DB + Redis wired),
-migrations `0000`–`0003` applied, categories seeded.
+Working: the board renders from Postgres with the outbid.lol‑matching layout
+(header, category nav, inline claim widget, footer, Swedish blue/gold palette),
+`/claim` form (all fields + EU consent + links to `/terms`/`/privacy`),
+`/go/{slug}` redirect, `/foretagsinformation` `/terms` `/privacy`, `/healthz` +
+`/readyz` (both green — DB + Redis wired), migrations `0000`–`0003` applied,
+categories seeded.
 
 **Not yet functional on the deploy:** taking a payment — needs Stripe keys +
 webhook endpoint (see §5). The worker service and its cron also need to be
 running (see §5).
 
-## 3. What was built — 12 PRs
+## 3. What was built — 14 PRs
 
 | # | | |
 |---|---|---|
@@ -44,6 +46,8 @@ running (see §5).
 | 10 | M2 | k6 load tests (board spike + settlement burst + ledger assertion) |
 | 11 | M3 | Swish/Klarna + Stripe Tax + VAT capture |
 | 12 | M3 | legal pages + `docs/compliance/launch-gate.md` |
+| 13 | docs | build status & handoff (this page) |
+| 14 | design | outbid.lol layout — header, category nav, inline claim widget, footer, Swedish blue/gold palette |
 
 ~92 tests (unit + property + Testcontainers integration), all CI‑gated. CI:
 `typecheck · lint · test · build · standalone /healthz smoke · integration
