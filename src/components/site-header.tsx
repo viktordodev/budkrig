@@ -1,3 +1,4 @@
+import { Logo } from "@/components/logo";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
@@ -10,10 +11,7 @@ export async function SiteHeader() {
   return (
     <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg)]/90 backdrop-blur">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3">
-        <Link href="/" className="flex items-center gap-1.5 font-semibold tracking-tight">
-          <span className="text-[var(--accent)]">Bud</span>
-          <span>krig</span>
-        </Link>
+        <Logo />
         <nav className="flex items-center gap-5 text-sm text-[var(--muted)]">
           <Link href="/#kategorier" className="transition-colors hover:text-[var(--fg)]">
             {tHeader("categories")}

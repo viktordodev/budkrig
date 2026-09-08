@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .badge { fill: #1b4fc4; }
+    .bar   { fill: #c3d8fb; }
+    .cap   { fill: #f4bf40; }
+    @media (prefers-color-scheme: dark) {
+      .badge { fill: #3b7bf0; }
+      .bar   { fill: #e3edfd; }
+      .cap   { fill: #ffd36b; }
+    }
+  </style>
+  <rect class="badge" width="32" height="32" rx="7" />
+  <rect class="bar" x="4.5" y="18.5" width="6" height="9" rx="2.4" />
+  <rect class="bar" x="13" y="13.5" width="6" height="14" rx="2.4" />
+  <rect class="bar" x="21.5" y="7.5" width="6" height="20" rx="2.4" />
+  <path class="cap" d="M21.5 14.5V9.9Q21.5 7.5 23.9 7.5h1.2Q27.5 7.5 27.5 9.9V14.5Z" />
+</svg>
